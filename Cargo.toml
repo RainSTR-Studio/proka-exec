@@ -2,5 +2,8 @@
 name = "proka-exec"
 version = "0.1.0"
 edition = "2024"
+authors = ["zhangxuan2011 <zx20110412@outlook.com>"]
+description = "The proka executable definitions and utilities"
+license = "GPL-3.0"
 
 [dependencies]
