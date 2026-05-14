@@ -1,76 +1,80 @@
-//! The proka executable header definitions and utilities.
+//! The proka executable header definitions.
 #![no_std]
+
+pub mod header;
 pub mod sections;
 
-/// The magic number, fixed to 'PKEX'
-pub const PKEX_MAGIC: u32 = 0x58454B50;
+use header::Header;
+use sections::{SectionIter, Section};
 
-/// The main header struct, which contains the metadata of the PKE file.
-#[repr(C)]
+/// The header size.
+pub const HEADER_SIZE: usize = core::mem::size_of::<Header>();
+
+/// The section entry size
+pub const SECTION_SIZE: usize = core::mem::size_of::<Section>();
+
+/// The parser of the proka executable.
+///
+/// # Usage
+/// To use this parser, you must put an slice into the initializations.
+///
+/// If the content of the proka executable is in memory, the best way
+/// is to use `core::slice::from_raw_parts`.
 #[derive(Debug, Clone, Copy)]
-pub struct Header {
-    /// The magic number, fixed to 'PKEX'
-    pub magic: u32,
-
-    /// The minimal kernel version supported.
-    ///
-    /// # Note
-    /// As the `proka-bootloader`'s definitions, its format is similar
-    /// like `[major, minor, fix]`. See `proka-bootloader` crate for more informations.
-    pub min: [u16; 3],
-
-    /// The maximum kernel supported.
-    ///
-    /// For notes, see above.
-    pub max: [u16; 3],
-
-    /// Signates is this executable run as `userapp` or `coredrv`.
-    pub mode: ExecMode,
-
-    /// The section table count.
-    pub sections: u32,
-
-    /// The author name (max length is 32 bytes).
-    pub author: [u8; 32],
-
-    /// The executable/project name.
-    pub name: [u8; 32],
-
-    /// Extended bits for different mode parsing.
-    pub extended: [u8; 48],
+pub struct Parser {
+    buf: &'static [u8],
+    header: Header,
+    total_sections: u16,
 }
 
-impl Default for Header {
-    fn default() -> Self {
-        Self::new()
+impl Parser {
+    /// Initialize the parser by passing an slice.
+    ///
+    /// # Safety
+    /// You must ensure these before invoking this function:
+    ///
+    ///  - The slice's content is a valid executable;
+    ///  - The slice's pointer is accessable and mapped;
+    ///  - The slice's length is larger than 128 bytes.
+    ///
+    /// If this crate has used by kernel, you need to do mapping 
+    /// first, and invoke this.
+    pub unsafe fn init(buf: &'static [u8]) -> Result<Self, Error> {
+        let header_raw = &buf[0..HEADER_SIZE];    // Header length
+        let header = unsafe { *(header_raw.as_ptr() as *const Header) };
+
+        // Check: Validate is this correct executable
+        if !header.validate() {
+            return Err(Error::NotValidExecutable);
+        }
+        
+        Ok(Self {
+            buf, header,
+            total_sections: header.sections,
+        })
     }
-}
 
-impl Header {
-    /// Create a header object.
-    pub fn new() -> Self {
-        Self {
-            magic: PKEX_MAGIC,
-            author: [0u8; 32],
-            name: [0u8; 32],
-            ..Default::default()
+    /// Get the header.
+    #[inline]
+    pub fn header(&self) -> Header {
+        self.header
+    }
+
+    /// Get each section table.
+    #[allow(private_interfaces)]
+    pub fn sections(&self) -> SectionIter {
+        SectionIter {
+            buf: self.buf,
+            total: self.total_sections,
+            current: 0,
         }
     }
-
-    /// Validate is this a valid proka executable.
-    #[inline]
-    pub fn validate(&self) -> bool {
-        self.magic == PKEX_MAGIC
-    }    
 }
 
-/// The executable mode.
+/// The error type of parsing header.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub enum ExecMode {
-    /// Run in `userapp` mode (Ring 3).
-    UserApp,
-
-    /// Run in `coredrv` mode (Ring 0).
-    CoreDrv,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Error {
+    /// The executable is not valid.
+    NotValidExecutable,
 }
