@@ -79,4 +79,8 @@ impl Parser {
 pub enum Error {
     /// The executable is not valid.
     NotValidExecutable,
+
+    /// An unknown character in UTF-8 was found in 
+    /// parsing arrays
+    UnknownCharacter,
 }
