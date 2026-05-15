@@ -1,4 +1,45 @@
-//! The proka executable header definitions.
+//! # `proka-exec`
+//! 
+//! [![Rust Nightly](https://img.shields.io/badge/rust-nightly-orange?style=flat-square&logo=rust)](https://www.rust-lang.org/)
+//! [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-yellow.svg?style=flat-square)](https://opensource.org/license/gpl-3.0)
+//! [![GitHub Stars](https://img.shields.io/github/stars/RainSTR-Studio/proka-exec?style=flat-square)](https://github.com/RainSTR-Studio/proka-exec/stargazers)
+//! [![GitHub Issues](https://img.shields.io/github/issues/RainSTR-Studio/proka-exec?style=flat-square)](https://github.com/RainSTR-Studio/proka-exec/issues)
+//! [![GitHub Pull Requests](https://img.shields.io/github/issues-pr/RainSTR-Studio/proka-exec?style=flat-square)](https://github.com/RainSTR-Studio/proka-exec/pulls)
+//! [![Documentation](https://img.shields.io/badge/docs-prokadoc-brightgreen?style=flat-square)](https://prokadoc.pages.dev/)
+//! 
+//! Copyright (C) 2026 RainSTR Studio. All rights reserved.
+//! 
+//! ---
+//! 
+//! ## Introduction
+//! This crate provides the definitions of headers, section 
+//! entrys, and some utils to help you parse the executable 
+//! easily.
+//! 
+//! ## Steps to use this crate
+//! Before you parse it, you should do these steps:
+//! 
+//! - Read the executable file content;
+//! - Make this file's content to a slice (`&'static [u8]`)
+//! - Use [`Parser`] to parse the executable.
+//! 
+//! After this, you can do further operations through this parser by 
+//! calling its functions.
+//! 
+//! ### Note
+//! If you want to do minimal reading, you can just read the header and 
+//! section table, other content can be read later;
+//! 
+//! Make sure you have read the header and each sections, and they are **NOT** optional!!!
+//! 
+//! # LICENSE
+//! This crate is under license [GPL-v3](https://github.com/RainSTR-Studio/proka-exec/blob/main/LICENSE), 
+//! and you must follow its rules.
+//! 
+//! See [LICENSE](https://github.com/RainSTR-Studio/proka-exec/blob/main/LICENSE) file for more details.
+//! 
+//! ## MSRV
+//! This crate's MSRV is `1.85.0` stable.
 #![no_std]
 
 pub mod header;
