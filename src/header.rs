@@ -1,5 +1,7 @@
 //! The header definitions.
 
+use crate::HEADER_SIZE;
+
 /// The magic number, fixed to 'PKEX'
 pub const PKEX_MAGIC: u32 = 0x58454B50;
 
@@ -35,7 +37,7 @@ pub struct Header {
     pub name: [u8; 32],
 
     /// Extended bits for different mode parsing.
-    pub extended: [u8; 48],
+    pub extended: [u8; 40],
 }
 
 impl Default for Header {
@@ -59,7 +61,14 @@ impl Header {
     #[inline]
     pub fn validate(&self) -> bool {
         self.magic == PKEX_MAGIC
-    }    
+    }
+
+    /// Convert this header to array
+    #[inline]
+    pub const fn to_array(&self) -> [u8; HEADER_SIZE] {
+        // SAFETY: used `#[repr(C)]`
+        unsafe { core::ptr::read(self as *const Self as *const [u8; HEADER_SIZE]) }
+    }
 }
 
 /// The executable mode.

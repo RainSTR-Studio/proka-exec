@@ -3,9 +3,11 @@
 
 pub mod header;
 pub mod sections;
+pub mod utils;
 
 use header::Header;
 use sections::{SectionIter, Section};
+pub use utils::*;
 
 /// The header size.
 pub const HEADER_SIZE: usize = core::mem::size_of::<Header>();

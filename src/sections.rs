@@ -18,7 +18,32 @@ pub struct Section {
     pub base: u32,
 
     /// The length of the section.
-    pub length: u32
+    pub length: u32,
+}
+
+impl Section {
+    /// Convert this object to array.
+    #[inline]
+    pub const fn to_array(&self) -> [u8; SECTION_SIZE] {
+        // SAFETY: used `#[repr(C)]`
+        unsafe { core::ptr::read(self as *const Self as *const [u8; SECTION_SIZE]) }
+    }
+
+    /// Validate is this section not corrupted.
+    #[inline]
+    pub fn validate(&self) -> bool {
+        // Base address must 4KiB aligned.
+        let is_aligned = (self.base & 0xfff) == 0;
+
+        // If is_loadable = false, is_executable = true, it is illegal
+        let is_correct_group = if self.is_execable && !self.is_loadable {
+            false
+        } else {
+            true
+        };
+
+        is_aligned || is_correct_group
+    }
 }
 
 /// The iterator of each sections
@@ -34,7 +59,7 @@ impl Iterator for SectionIter {
     type Item = Section;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let base = HEADER_SIZE + self.current as usize * SECTION_SIZE; 
+        let base = HEADER_SIZE + self.current as usize * SECTION_SIZE;
         let buf = &self.buf[base..base + SECTION_SIZE];
 
         // Check: is current over than total
