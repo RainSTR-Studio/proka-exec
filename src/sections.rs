@@ -36,11 +36,7 @@ impl Section {
         let is_aligned = (self.base & 0xfff) == 0;
 
         // If is_loadable = false, is_executable = true, it is illegal
-        let is_correct_group = if self.is_execable && !self.is_loadable {
-            false
-        } else {
-            true
-        };
+        let is_correct_group = !(self.is_execable && !self.is_loadable);
 
         is_aligned || is_correct_group
     }
