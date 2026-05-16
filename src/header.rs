@@ -1,5 +1,4 @@
 //! The header definitions.
-
 use crate::HEADER_SIZE;
 
 /// The magic number, fixed to 'PKEX'

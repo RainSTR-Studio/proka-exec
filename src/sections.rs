@@ -21,7 +21,7 @@ pub struct Section {
     pub length: u32,
 
     /// Reserved bits
-    pub _reserved: [u8; 6]
+    pub _reserved: [u8; 6],
 }
 
 impl Section {
@@ -35,18 +35,16 @@ impl Section {
     /// Validate is this section not corrupted.
     #[inline]
     pub fn validate(&self) -> bool {
-        // If the section is loadable, its base must 4KiB
-        // aligned.
-        let align_ok = if self.is_loadable {
-            (self.base & 0xfff) == 0
-        } else {
-            true
-        };
-
         // Cannot executable if unloadable
-        let perm_ok = !(self.is_execable && !self.is_loadable);
+        let bit_ok = !(self.is_execable && !self.is_loadable);
 
-        align_ok && perm_ok
+        // Length cannot be 0
+        let length_ok = self.length != 0;
+
+        // First check: base must >= 128+32
+        let base_ok = self.base as usize >= (HEADER_SIZE + SECTION_SIZE);
+
+        bit_ok || length_ok || base_ok
     }
 }
 

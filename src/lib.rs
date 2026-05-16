@@ -71,17 +71,17 @@ pub struct Parser {
 }
 
 impl Parser {
-    /// Initialize the parser by passing an slice.
+    /// Initialize the parser by passing a slice.
     ///
     /// # Safety
     /// You must ensure these before invoking this function:
     ///
-    ///  - The slice's content is a valid executable;
-    ///  - The slice's pointer is accessable and mapped;
-    ///  - The slice's length is larger than 128 bytes.
+    ///  - The slice's pointer is accessible and properly mapped;
+    ///  - The slice's content is a valid executable (internally checked);
+    ///  - The slice must contain the header and all section tables (internally checked).
     ///
-    /// If this crate has used by kernel, you need to do mapping
-    /// first, and invoke this.
+    /// If this crate is used on the kernel-side, you must first map the memory
+    /// that the slice points to before invoking this function.
     pub unsafe fn init(buf: &'static [u8]) -> Result<Self, Error> {
         let header_raw = &buf[0..HEADER_SIZE]; // Header length
         let header = unsafe { *(header_raw.as_ptr() as *const Header) };
@@ -91,6 +91,12 @@ impl Parser {
             return Err(Error::NotValidExecutable);
         }
 
+        // Check: Is the buffer contains all sections
+        let len = HEADER_SIZE + header.sections as usize * SECTION_SIZE;
+        if buf.len() < len {
+            return Err(Error::ExecutableCorrupted);
+        }
+
         Ok(Self {
             buf,
             header,
@@ -98,7 +104,37 @@ impl Parser {
         })
     }
 
-    /// Get the header.
+    /// Do more validation after initialization.
+    ///
+    /// # Content
+    /// This will validates:
+    ///
+    ///  - Is the header min >= max;
+    ///  - Is each section's base correct;
+    ///  - Is the section's length not zeroed.
+    pub fn validate(&self) -> bool {
+        // Check: Is header's min > max
+        let minimal = self.header.min;
+        let maximum = self.header.max;
+        for (&min, &max) in minimal.iter().zip(maximum.iter()) {
+            if min > max {
+                return false;
+            }
+        }
+
+        // Check: Is each section's base and length correct
+        let min_base = HEADER_SIZE + self.header.sections as usize * SECTION_SIZE;
+        for section in self.sections() {
+            if (section.base as usize) < min_base || section.length == 0 {
+                return false;
+            }
+        }
+
+        // All's fine :)
+        true
+    }
+
+    /// Get the header in this buffer.
     #[inline]
     pub fn header(&self) -> Header {
         self.header
@@ -119,10 +155,20 @@ impl Parser {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
-    /// The executable is not valid.
+    /// The executable is not valid
+    ///
+    /// Will appear if magic is not correct.
     NotValidExecutable,
+
+    /// The executable is corrupted.
+    ///
+    /// Will appear if the buffer size is lower than specified
+    /// length.
+    ExecutableCorrupted,
 
     /// An unknown character in UTF-8 was found in
     /// parsing arrays
+    ///
+    /// May appear in converting slice to `&str`.
     UnknownCharacter,
 }
