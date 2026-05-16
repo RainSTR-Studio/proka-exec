@@ -32,13 +32,18 @@ impl Section {
     /// Validate is this section not corrupted.
     #[inline]
     pub fn validate(&self) -> bool {
-        // Base address must 4KiB aligned.
-        let is_aligned = (self.base & 0xfff) == 0;
+        // If the section is loadable, its base must 4KiB
+        // aligned.
+        let align_ok = if self.is_loadable {
+            (self.base & 0xfff) == 0
+        } else {
+            true
+        };
 
-        // If is_loadable = false, is_executable = true, it is illegal
-        let is_correct_group = !(self.is_execable && !self.is_loadable);
+        // Cannot executable if unloadable
+        let perm_ok = !(self.is_execable && !self.is_loadable);
 
-        is_aligned || is_correct_group
+        align_ok && perm_ok
     }
 }
 
