@@ -2,7 +2,7 @@
 use crate::{HEADER_SIZE, SECTION_SIZE};
 
 /// A section entry.
-#[repr(C)]
+#[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct Section {
     /// The section name (16 bytes max).
@@ -19,6 +19,9 @@ pub struct Section {
 
     /// The length of the section.
     pub length: u32,
+
+    /// Reserved bits
+    pub _reserved: [u8; 6]
 }
 
 impl Section {

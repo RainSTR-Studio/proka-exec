@@ -6,7 +6,7 @@ use crate::HEADER_SIZE;
 pub const PKEX_MAGIC: u32 = 0x58454B50;
 
 /// The main header struct, which contains the metadata of the PKE file.
-#[repr(C)]
+#[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct Header {
     /// The magic number, fixed to 'PKEX'
@@ -37,7 +37,7 @@ pub struct Header {
     pub name: [u8; 32],
 
     /// Extended bits for different mode parsing.
-    pub extended: [u8; 40],
+    pub extended: [u8; 42],
 }
 
 impl Default for Header {
