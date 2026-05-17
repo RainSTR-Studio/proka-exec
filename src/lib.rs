@@ -112,6 +112,7 @@ impl Parser {
     ///  - Is the header min >= max;
     ///  - Is each section's base correct;
     ///  - Is the section's length not zeroed.
+    ///  - Is section base out of length.
     pub fn validate(&self) -> bool {
         // Check: Is header's min > max
         let minimal = self.header.min;
@@ -125,7 +126,14 @@ impl Parser {
         // Check: Is each section's base and length correct
         let min_base = HEADER_SIZE + self.header.sections as usize * SECTION_SIZE;
         for section in self.sections() {
-            if (section.base as usize) < min_base || section.length == 0 {
+            let base_off = section.base as usize;
+            let len = section.length as usize;
+
+            if base_off < min_base
+                || base_off + len > self.buf.len()
+                || len == 0
+                || !section.validate()
+            {
                 return false;
             }
         }

@@ -61,16 +61,19 @@ impl Iterator for SectionIter {
     type Item = Section;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let base = HEADER_SIZE + self.current as usize * SECTION_SIZE;
-        let buf = &self.buf[base..base + SECTION_SIZE];
-
         // Check: is current over than total
         if self.current >= self.total {
             return None;
         }
 
+        let base = HEADER_SIZE + self.current as usize * SECTION_SIZE;
+        let buf = &self.buf[base..base + SECTION_SIZE];
+
         // Now convert it
         let section = unsafe { *(buf.as_ptr() as *const Section) };
+
+        // Plus current value and return
+        self.current += 1;
         Some(section)
     }
 }
