@@ -15,6 +15,6 @@ pub fn str_to_array<const N: usize>(s: &str) -> [u8; N] {
 
 /// Convert the slice to a UTF-8 string.
 #[inline]
-pub fn slice_to_str(arr: &mut [u8]) -> Result<&str, Error> {
+pub fn slice_to_str(arr: &[u8]) -> Result<&str, Error> {
     str::from_utf8(arr).map_err(|_| Error::UnknownCharacter)
 }
