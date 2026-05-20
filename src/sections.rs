@@ -50,10 +50,19 @@ impl Section {
 
 /// The iterator of each sections
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct SectionIter {
-    pub buf: &'static [u8],
-    pub total: u16,
-    pub current: u16,
+pub struct SectionIter {
+    buf: &'static [u8],
+    total: u16,
+    current: u16,
+}
+impl SectionIter {
+    pub(crate) fn new(buf: &'static [u8], total: u16, current: u16) -> Self {
+        Self {
+            buf,
+            total,
+            current,
+        }
+    }
 }
 
 // Iterator implementations

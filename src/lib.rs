@@ -151,11 +151,7 @@ impl Parser {
     /// Get each section table.
     #[allow(private_interfaces)]
     pub fn sections(&self) -> SectionIter {
-        SectionIter {
-            buf: self.buf,
-            total: self.total_sections,
-            current: 0,
-        }
+        SectionIter::new(self.buf, self.total_sections, 0)
     }
 }
 
