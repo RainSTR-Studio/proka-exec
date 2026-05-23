@@ -71,18 +71,38 @@ pub struct Parser {
 }
 
 impl Parser {
-    /// Initialize the parser by passing a slice.
+    /// Initialize the parser by passing a slice without checking.
     ///
     /// # Safety
-    /// You must ensure these before invoking this function:
+    /// You must ensure these if you invoke this function:
     ///
-    ///  - The slice's pointer is accessible and properly mapped;
-    ///  - The slice's content is a valid executable (internally checked);
-    ///  - The slice must contain the header and all section tables (internally checked).
+    ///  - The slice's content is a valid proka executable (match the magic);
+    ///  - The slice must contain the header and all section tables.
     ///
+    /// # Note
+    /// Use this function to initialize is **NOT** recommended, because it might  
+    /// cause some problems while parsing this header.
+    pub unsafe fn init_unchecked(buf: &'static [u8]) -> Self {
+        let header_raw = &buf[0..HEADER_SIZE];
+        let header = unsafe { *(header_raw.as_ptr() as *const Header) };
+
+        Self {
+            buf, 
+            header,
+            total_sections: header.sections,
+        }
+    }
+
+    /// Initialize the parser by passing a slice.
+    ///
+    /// This is the recommended way to initialize this parser, because it will 
+    /// help you do all checks and return error if something wrong, so you can 
+    /// leave everything about parsing to us :)
+    ///
+    /// # Note
     /// If this crate is used on the kernel-side, you must first map the memory
     /// that the slice points to before invoking this function.
-    pub unsafe fn init(buf: &'static [u8]) -> Result<Self, Error> {
+    pub fn init(buf: &'static [u8]) -> Result<Self, Error> {
         let header_raw = &buf[0..HEADER_SIZE]; // Header length
         let header = unsafe { *(header_raw.as_ptr() as *const Header) };
 
@@ -97,11 +117,8 @@ impl Parser {
             return Err(Error::ExecutableCorrupted);
         }
 
-        Ok(Self {
-            buf,
-            header,
-            total_sections: header.sections,
-        })
+        // SAFETY: Already check all staff and able to do initialization
+        unsafe { Ok(Self::init_unchecked(buf)) }
     }
 
     /// Do more validation after initialization.

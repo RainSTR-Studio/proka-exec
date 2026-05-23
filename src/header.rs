@@ -29,6 +29,9 @@ pub struct Header {
     /// The section table count.
     pub sections: u16,
 
+    /// The entry point address.
+    pub entry: u32,
+
     /// The author name (max length is 32 bytes).
     pub author: [u8; 32],
 
@@ -36,7 +39,7 @@ pub struct Header {
     pub name: [u8; 32],
 
     /// Extended bits for different mode parsing.
-    pub extended: [u8; 42],
+    pub extended: [u8; 38],
 }
 
 impl Default for Header {
@@ -79,4 +82,16 @@ pub enum ExecMode {
 
     /// Run in `coredrv` mode (Ring 0).
     CoreDrv,
+}
+
+// Tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_header_length() {
+        assert_eq!(crate::HEADER_SIZE, 128);
+        assert_eq!(core::mem::size_of::<Header>(), 128)
+    }
 }
