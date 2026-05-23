@@ -72,7 +72,7 @@ impl Header {
 
 /// The executable mode.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecMode {
     /// Run in `userapp` mode (Ring 3).
     UserApp,

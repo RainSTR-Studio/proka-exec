@@ -1,10 +1,11 @@
 [package]
 name = "proka-exec"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2024"
 authors = ["zhangxuan2011 <zx20110412@outlook.com>"]
 description = "The proka executable definitions and utilities"
 license = "GPL-3.0"
 readme = "README.md"
+repository = "https://github.com/RainSTR-Studio/proka-exec"
 
 [dependencies]
