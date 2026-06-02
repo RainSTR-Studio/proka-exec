@@ -159,6 +159,29 @@ impl Parser {
         true
     }
 
+    /// Get the content from specified sections.
+    ///
+    /// # Arguments
+    ///  - secname: The name of the section
+    /// 
+    /// # Returns
+    /// Option<&'static [u8]>: 
+    pub fn get_section_content(&self, secname: &str) -> Option<&'static [u8]> {
+        // Iterate all sections...
+        for section in self.sections() {
+            let name = section.name;
+            if str_to_array(secname) == name {
+                // Get its base and length
+                let base = section.base as usize;
+                let length = section.length as usize;
+                let content = &self.buf[base..base + length];
+                return Some(content);
+            }
+        }
+         
+        None
+    }
+
     /// Get the header in this buffer.
     #[inline]
     pub fn header(&self) -> Header {
@@ -166,7 +189,6 @@ impl Parser {
     }
 
     /// Get each section table.
-    #[allow(private_interfaces)]
     pub fn sections(&self) -> SectionIter {
         SectionIter::new(self.buf, self.total_sections, 0)
     }
