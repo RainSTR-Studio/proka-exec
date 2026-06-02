@@ -46,7 +46,7 @@ pub mod header;
 pub mod sections;
 pub mod utils;
 
-use header::Header;
+use header::{Header, ExecMode};
 use sections::{Section, SectionIter};
 pub use utils::*;
 
@@ -165,7 +165,7 @@ impl Parser {
     ///  - secname: The name of the section
     /// 
     /// # Returns
-    /// Option<&'static [u8]>: 
+    /// Option<&'static [u8]>: The content of this section, return `None` if this section not exist.
     pub fn get_section_content(&self, secname: &str) -> Option<&'static [u8]> {
         // Iterate all sections...
         for section in self.sections() {
@@ -194,6 +194,48 @@ impl Parser {
     }
 }
 
+/// The builder of the proka executable.
+#[derive(Default, Debug, Clone)]
+pub struct Builder {
+    author: [u8; 32],
+    name: [u8; 32],
+    mode: ExecMode,
+}
+
+impl Builder {
+    /// Create up a empty builder.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set up the author 
+    pub fn set_author(&mut self, author: &str) -> Result<(), Error> {
+        // Check: Is length over than header's author length.
+        if author.len() > 32 {
+            return Err(Error::ArgsTooLong);
+        }
+
+        self.author = str_to_array(author);
+        Ok(())
+    }
+
+    /// Set up the program name.
+    pub fn set_name(&mut self, name: &str) -> Result<(), Error> {
+        // Check: Is length overflow
+        if name.len() > 32 {
+            return Err(Error::ArgsTooLong);
+        }
+
+        self.name = str_to_array(name);
+        Ok(())
+    }
+
+    /// Set the mode of this program
+    pub fn set_mode(&mut self, mode: ExecMode) {
+        self.mode = mode;
+    }
+}
+
 /// The error type of parsing header.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -214,4 +256,10 @@ pub enum Error {
     ///
     /// May appear in converting slice to `&str`.
     UnknownCharacter,
+
+    /// The argument which gives is too long.
+    ///
+    /// For example, if a field, which require at most 16 bytes, but you gave
+    /// 17 bytes, it will return this error.
+    ArgsTooLong,
 }

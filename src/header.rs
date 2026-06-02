@@ -75,9 +75,10 @@ impl Header {
 
 /// The executable mode.
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecMode {
     /// Run in `userapp` mode (Ring 3).
+    #[default]
     UserApp,
 
     /// Run in `coredrv` mode (Ring 0).
