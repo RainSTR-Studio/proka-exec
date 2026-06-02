@@ -42,11 +42,17 @@
 //! This crate's MSRV is `1.85.0` stable.
 #![no_std]
 
+// Alloc features...
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 pub mod header;
 pub mod sections;
 pub mod utils;
 
-use header::{Header, ExecMode};
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+use header::{ExecMode, Header};
 use sections::{Section, SectionIter};
 pub use utils::*;
 
@@ -87,7 +93,7 @@ impl Parser {
         let header = unsafe { *(header_raw.as_ptr() as *const Header) };
 
         Self {
-            buf, 
+            buf,
             header,
             total_sections: header.sections,
         }
@@ -95,8 +101,8 @@ impl Parser {
 
     /// Initialize the parser by passing a slice.
     ///
-    /// This is the recommended way to initialize this parser, because it will 
-    /// help you do all checks and return error if something wrong, so you can 
+    /// This is the recommended way to initialize this parser, because it will
+    /// help you do all checks and return error if something wrong, so you can
     /// leave everything about parsing to us :)
     ///
     /// # Note
@@ -162,10 +168,10 @@ impl Parser {
     /// Get the content from specified sections.
     ///
     /// # Arguments
-    ///  - secname: The name of the section
-    /// 
+    ///  - `secname`: The name of the section
+    ///
     /// # Returns
-    /// Option<&'static [u8]>: The content of this section, return `None` if this section not exist.
+    /// `Option<&'static [u8]>`: The content of this section, return `None` if this section not exist.
     pub fn get_section_content(&self, secname: &str) -> Option<&'static [u8]> {
         // Iterate all sections...
         for section in self.sections() {
@@ -178,7 +184,7 @@ impl Parser {
                 return Some(content);
             }
         }
-         
+
         None
     }
 
@@ -196,19 +202,28 @@ impl Parser {
 
 /// The builder of the proka executable.
 #[derive(Default, Debug, Clone)]
+#[cfg(feature = "alloc")]
 pub struct Builder {
     author: [u8; 32],
     name: [u8; 32],
     mode: ExecMode,
+    sections: Vec<InnerSections>,
+    ptr: usize,
 }
 
+#[cfg(feature = "alloc")]
 impl Builder {
     /// Create up a empty builder.
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            ptr: HEADER_SIZE,
+            ..Default::default()
+        }
     }
 
-    /// Set up the author 
+    /// Set up the author.
+    /// 
+    /// Will return error if length is > 32.
     pub fn set_author(&mut self, author: &str) -> Result<(), Error> {
         // Check: Is length over than header's author length.
         if author.len() > 32 {
@@ -220,6 +235,8 @@ impl Builder {
     }
 
     /// Set up the program name.
+    /// 
+    /// Will return error if length is > 32.
     pub fn set_name(&mut self, name: &str) -> Result<(), Error> {
         // Check: Is length overflow
         if name.len() > 32 {
@@ -230,10 +247,59 @@ impl Builder {
         Ok(())
     }
 
-    /// Set the mode of this program
+    /// Set the mode of this program.
     pub fn set_mode(&mut self, mode: ExecMode) {
         self.mode = mode;
     }
+
+    /// Append a section and specify its name.
+    /// 
+    /// # Arguments
+    ///  - `data`: The data that you want to append;
+    ///  - `name`: The section name;
+    ///  - `is_loadable`: Assign is this loadable section or not;
+    ///  - `is_execable`: Assign is this executable section or not;
+    pub fn append(
+        &mut self,
+        data: &'static [u8],
+        name: &str,
+        is_loadable: bool,
+        is_execable: bool,
+    ) {
+        let section = InnerSections {
+            secinfo: Section {
+                name: str_to_array(name),
+                is_loadable,
+                is_execable,
+                base: self.ptr as u32,
+                length: data.len() as u32,
+                _reserved: [0; 6],
+            },
+            data,
+        };
+        self.sections.push(section);
+        self.ptr += data.len();
+    }
+
+    /// Build the whole file to a valid exec format.
+    /// 
+    /// Will return error if no section was appended.
+    pub fn build(self) -> Result<(), Error> {
+        // Check: Is section list empty
+        if self.sections.is_empty() {
+            return Err(Error::NoSections);
+        }
+
+        // TODO: Implement section integration
+        Ok(())
+    }
+}
+
+/// Internal section form.
+#[derive(Debug, Clone, Copy)]
+struct InnerSections {
+    pub secinfo: Section,
+    pub data: &'static [u8],
 }
 
 /// The error type of parsing header.
@@ -262,4 +328,7 @@ pub enum Error {
     /// For example, if a field, which require at most 16 bytes, but you gave
     /// 17 bytes, it will return this error.
     ArgsTooLong,
+
+    /// No sections in the current executable.
+    NoSections,
 }

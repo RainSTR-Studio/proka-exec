@@ -9,3 +9,7 @@ readme = "README.md"
 repository = "https://github.com/RainSTR-Studio/proka-exec"
 
 [dependencies]
+
+[features]
+default = ["alloc"]
+alloc = []
