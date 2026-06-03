@@ -6,7 +6,7 @@ static SAMPLE: &[u8] = include_bytes!("testbin/sample.pke");
 
 // Parser init
 #[inline]
-fn init() -> Parser {
+fn init() -> Parser<'static> {
     Parser::init(SAMPLE).unwrap()
 }
 

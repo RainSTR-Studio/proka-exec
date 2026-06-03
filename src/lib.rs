@@ -51,7 +51,10 @@ pub mod sections;
 pub mod utils;
 
 #[cfg(feature = "alloc")]
-use alloc::vec::Vec;
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use header::{ExecMode, Header};
 use sections::{Section, SectionIter};
 pub use utils::*;
@@ -70,13 +73,13 @@ pub const SECTION_SIZE: usize = core::mem::size_of::<Section>();
 /// If the content of the proka executable is in memory, the best way
 /// is to use `core::slice::from_raw_parts`.
 #[derive(Debug, Clone, Copy)]
-pub struct Parser {
-    buf: &'static [u8],
+pub struct Parser<'a> {
+    buf: &'a [u8],
     header: Header,
     total_sections: u16,
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
     /// Initialize the parser by passing a slice without checking.
     ///
     /// # Safety
@@ -88,7 +91,7 @@ impl Parser {
     /// # Note
     /// Use this function to initialize is **NOT** recommended, because it might  
     /// cause some problems while parsing this header.
-    pub unsafe fn init_unchecked(buf: &'static [u8]) -> Self {
+    pub unsafe fn init_unchecked(buf: &'a [u8]) -> Self {
         let header_raw = &buf[0..HEADER_SIZE];
         let header = unsafe { *(header_raw.as_ptr() as *const Header) };
 
@@ -108,7 +111,7 @@ impl Parser {
     /// # Note
     /// If this crate is used on the kernel-side, you must first map the memory
     /// that the slice points to before invoking this function.
-    pub fn init(buf: &'static [u8]) -> Result<Self, Error> {
+    pub fn init(buf: &'a [u8]) -> Result<Self, Error> {
         let header_raw = &buf[0..HEADER_SIZE]; // Header length
         let header = unsafe { *(header_raw.as_ptr() as *const Header) };
 
@@ -172,7 +175,7 @@ impl Parser {
     ///
     /// # Returns
     /// `Option<&'static [u8]>`: The content of this section, return `None` if this section not exist.
-    pub fn get_section_content(&self, secname: &str) -> Option<&'static [u8]> {
+    pub fn get_section_content(&self, secname: &str) -> Option<&'a [u8]> {
         // Iterate all sections...
         for section in self.sections() {
             let name = section.name;
@@ -195,29 +198,44 @@ impl Parser {
     }
 
     /// Get each section table.
-    pub fn sections(&self) -> SectionIter {
+    pub fn sections(&self) -> SectionIter<'_> {
         SectionIter::new(self.buf, self.total_sections, 0)
     }
 }
 
 /// The builder of the proka executable.
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 #[cfg(feature = "alloc")]
 pub struct Builder {
     min: [u16; 3],
     max: [u16; 3],
     entry: u32,
-    author: [u8; 32],
-    name: [u8; 32],
+    author: String,
+    name: String,
     mode: ExecMode,
     sections: Vec<InnerSections>,
+}
+
+#[cfg(feature = "alloc")]
+impl Default for Builder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(feature = "alloc")]
 impl Builder {
     /// Create up a empty builder.
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            min: [0; 3],
+            max: [0; 3],
+            entry: 0,
+            author: String::new(),
+            name: String::new(),
+            mode: ExecMode::UserApp,
+            sections: Vec::new(),
+        }
     }
 
     /// Set up the author.
@@ -229,7 +247,7 @@ impl Builder {
             return Err(Error::ArgsTooLong);
         }
 
-        self.author = str_to_array(author);
+        self.author = author.to_string();
         Ok(())
     }
 
@@ -242,7 +260,7 @@ impl Builder {
             return Err(Error::ArgsTooLong);
         }
 
-        self.name = str_to_array(name);
+        self.name = name.to_string();
         Ok(())
     }
 
@@ -302,36 +320,38 @@ impl Builder {
         let mut data: Vec<u8> = Vec::new();
 
         // Then create up a header and push into data...
-        let header = Header {
-            min: self.min,
-            max: self.max,
-            entry: self.entry,
-            mode: self.mode,
-            author: self.author,
-            name: self.name,
-            sections: self.sections.len() as u16,
-            ..Default::default()
+        {
+            let header = Header {
+                min: self.min,
+                max: self.max,
+                entry: self.entry,
+                mode: self.mode,
+                author: str_to_array(self.author.as_str()),
+                name: str_to_array(self.name.as_str()),
+                sections: self.sections.len() as u16,
+                ..Default::default()
+            }
+            .to_array();
+            data.extend_from_slice(&header);
         }
-        .to_array();
-        header.iter().for_each(|item| data.push(*item));
 
         // And each section info...
         let mut cnt = 0;
-        self.sections.iter().for_each(|section| {
+        for section in &self.sections {
             let mut secinfo = section.secinfo;
 
             // Update base...
             secinfo.base += (self.sections.len() * SECTION_SIZE + cnt) as u32;
 
             // Push...
-            secinfo.to_array().iter().for_each(|item| data.push(*item));
+            data.extend_from_slice(&secinfo.to_array());
             cnt += section.data.len();
-        });
+        }
 
         // And each section's data...
-        self.sections.iter().for_each(|section| {
-            section.data.iter().for_each(|item| data.push(*item));
-        });
+        for section in &self.sections {
+            data.extend_from_slice(&section.data);
+        }
 
         // Return
         Ok(data)
