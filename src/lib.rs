@@ -204,25 +204,24 @@ impl Parser {
 #[derive(Default, Debug, Clone)]
 #[cfg(feature = "alloc")]
 pub struct Builder {
+    min: [u16; 3],
+    max: [u16; 3],
+    entry: u32,
     author: [u8; 32],
     name: [u8; 32],
     mode: ExecMode,
     sections: Vec<InnerSections>,
-    ptr: usize,
 }
 
 #[cfg(feature = "alloc")]
 impl Builder {
     /// Create up a empty builder.
     pub fn new() -> Self {
-        Self {
-            ptr: HEADER_SIZE,
-            ..Default::default()
-        }
+        Self::default()
     }
 
     /// Set up the author.
-    /// 
+    ///
     /// Will return error if length is > 32.
     pub fn set_author(&mut self, author: &str) -> Result<(), Error> {
         // Check: Is length over than header's author length.
@@ -235,7 +234,7 @@ impl Builder {
     }
 
     /// Set up the program name.
-    /// 
+    ///
     /// Will return error if length is > 32.
     pub fn set_name(&mut self, name: &str) -> Result<(), Error> {
         // Check: Is length overflow
@@ -252,8 +251,18 @@ impl Builder {
         self.mode = mode;
     }
 
+    /// Set the min version.
+    pub fn set_min(&mut self, min: [u16; 3]) {
+        self.min = min;
+    }
+
+    /// Set the max version.
+    pub fn set_max(&mut self, max: [u16; 3]) {
+        self.max = max;
+    }
+
     /// Append a section and specify its name.
-    /// 
+    ///
     /// # Arguments
     ///  - `data`: The data that you want to append;
     ///  - `name`: The section name;
@@ -271,27 +280,61 @@ impl Builder {
                 name: str_to_array(name),
                 is_loadable,
                 is_execable,
-                base: self.ptr as u32,
+                base: HEADER_SIZE as u32, // Will replace during building...
                 length: data.len() as u32,
                 _reserved: [0; 6],
             },
             data,
         };
         self.sections.push(section);
-        self.ptr += data.len();
     }
 
     /// Build the whole file to a valid exec format.
-    /// 
+    ///
     /// Will return error if no section was appended.
-    pub fn build(self) -> Result<(), Error> {
+    pub fn build(self) -> Result<Vec<u8>, Error> {
         // Check: Is section list empty
         if self.sections.is_empty() {
             return Err(Error::NoSections);
         }
 
-        // TODO: Implement section integration
-        Ok(())
+        // Create up a data...
+        let mut data: Vec<u8> = Vec::new();
+
+        // Then create up a header and push into data...
+        let header = Header {
+            min: self.min,
+            max: self.max,
+            entry: self.entry,
+            mode: self.mode,
+            author: self.author,
+            name: self.name,
+            sections: self.sections.len() as u16,
+            ..Default::default()
+        }
+        .to_array();
+        header.iter().for_each(|item| data.push(*item));
+
+        // And each section info...
+        let mut cnt = 0;
+        self.sections.iter().for_each(|section| {
+            let mut secinfo = section.secinfo;
+
+            // Update base...
+            secinfo.base += (self.sections.len() * SECTION_SIZE + cnt) as u32;
+
+            // Push...
+            secinfo.to_array().iter().for_each(|item| data.push(*item));
+            cnt += section.data.len();
+        });
+
+        // And each section's data...
+        self.sections.iter().for_each(|section| {
+            section.data.iter().for_each(|item| data.push(*item));
+        });
+
+        // Return
+        Ok(data)
     }
 }
 
