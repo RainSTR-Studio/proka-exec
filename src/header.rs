@@ -53,9 +53,14 @@ impl Header {
     pub fn new() -> Self {
         Self {
             magic: PKEX_MAGIC,
-            author: [0u8; 32],
-            name: [0u8; 32],
-            ..Default::default()
+            min: [0; 3],
+            max: [0; 3],
+            mode: ExecMode::UserApp,
+            sections: 0,
+            entry: HEADER_SIZE as u32,
+            author: [0; 32],
+            name: [0; 32],
+            extended: [0u8; 38],
         }
     }
 

@@ -18,3 +18,24 @@ pub fn str_to_array<const N: usize>(s: &str) -> [u8; N] {
 pub fn slice_to_str(arr: &[u8]) -> Result<&str, Error> {
     str::from_utf8(arr).map_err(|_| Error::UnknownCharacter)
 }
+
+// Tests...
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEXT: &str = "Hello world";
+    const RAW: &[u8] = &*b"Hello world";
+
+    #[test]
+    fn test_str_to_array() {
+        let result: [u8; 11] = str_to_array(TEXT);
+        assert_eq!(&result, RAW);
+    }
+
+    #[test]
+    fn test_slice_to_str() {
+        let result = slice_to_str(RAW).unwrap();
+        assert_eq!(result, TEXT);
+    }
+}

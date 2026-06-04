@@ -56,5 +56,5 @@ fn test_is_section_not_found_work() {
     let parser = init();
 
     // Tryna get a content which is not exist...
-    parser.get_section_content(".wtf").unwrap();    // Should panic!
+    parser.get_section_content(".wtf").unwrap(); // Should panic!
 }

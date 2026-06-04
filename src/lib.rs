@@ -206,25 +206,25 @@ impl<'a> Parser<'a> {
 /// The builder of the proka executable.
 #[derive(Debug, Clone)]
 #[cfg(feature = "alloc")]
-pub struct Builder {
+pub struct Builder<'a> {
     min: [u16; 3],
     max: [u16; 3],
     entry: u32,
     author: String,
     name: String,
     mode: ExecMode,
-    sections: Vec<InnerSections>,
+    sections: Vec<InnerSections<'a>>,
 }
 
 #[cfg(feature = "alloc")]
-impl Default for Builder {
+impl Default for Builder<'_> {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[cfg(feature = "alloc")]
-impl Builder {
+impl<'a> Builder<'a> {
     /// Create up a empty builder.
     pub fn new() -> Self {
         Self {
@@ -286,13 +286,7 @@ impl Builder {
     ///  - `name`: The section name;
     ///  - `is_loadable`: Assign is this loadable section or not;
     ///  - `is_execable`: Assign is this executable section or not;
-    pub fn append(
-        &mut self,
-        data: &'static [u8],
-        name: &str,
-        is_loadable: bool,
-        is_execable: bool,
-    ) {
+    pub fn append(&mut self, data: &'a [u8], name: &str, is_loadable: bool, is_execable: bool) {
         let section = InnerSections {
             secinfo: Section {
                 name: str_to_array(name),
@@ -360,9 +354,9 @@ impl Builder {
 
 /// Internal section form.
 #[derive(Debug, Clone, Copy)]
-struct InnerSections {
+struct InnerSections<'a> {
     pub secinfo: Section,
-    pub data: &'static [u8],
+    pub data: &'a [u8],
 }
 
 /// The error type of parsing header.
@@ -374,7 +368,7 @@ pub enum Error {
     /// Will appear if magic is not correct.
     NotValidExecutable,
 
-    /// The executable is corrupted.
+    /// The section which is corrupted.
     ///
     /// Will appear if the buffer size is lower than specified
     /// length.
