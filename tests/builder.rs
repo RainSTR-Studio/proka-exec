@@ -6,12 +6,12 @@ static DATA: [u8; 8] = [0x01, 0x02, 0x03, 0x04, 0x05, 0x11, 0x45, 0x14];
 
 fn buildpke() -> Vec<u8> {
     let mut builder = Builder::new();
-    builder.set_author("zhangxuan2011").unwrap();
-    builder.set_name("testapp").unwrap();
+    builder.set_author("zhangxuan2011");
+    builder.set_name("testapp");
     builder.set_max([0, 2, 0]);
     builder.set_min([0, 1, 0]);
-    builder.append(&TEXT, ".text", true, true);
-    builder.append(&DATA, ".data", true, false);
+    builder.append(&TEXT, ".text", true, true, None).unwrap();
+    builder.append(&DATA, ".data", true, false, None).unwrap();
 
     builder.build().unwrap()
 }

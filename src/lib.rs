@@ -241,27 +241,15 @@ impl<'a> Builder<'a> {
     /// Set up the author.
     ///
     /// Will return error if length is > 32.
-    pub fn set_author(&mut self, author: &str) -> Result<(), Error> {
-        // Check: Is length over than header's author length.
-        if author.len() > 32 {
-            return Err(Error::ArgsTooLong);
-        }
-
+    pub fn set_author(&mut self, author: &str) {
         self.author = author.to_string();
-        Ok(())
     }
 
     /// Set up the program name.
     ///
     /// Will return error if length is > 32.
-    pub fn set_name(&mut self, name: &str) -> Result<(), Error> {
-        // Check: Is length overflow
-        if name.len() > 32 {
-            return Err(Error::ArgsTooLong);
-        }
-
+    pub fn set_name(&mut self, name: &str) {
         self.name = name.to_string();
-        Ok(())
     }
 
     /// Set the mode of this program.
@@ -286,7 +274,27 @@ impl<'a> Builder<'a> {
     ///  - `name`: The section name;
     ///  - `is_loadable`: Assign is this loadable section or not;
     ///  - `is_execable`: Assign is this executable section or not;
-    pub fn append(&mut self, data: &'a [u8], name: &str, is_loadable: bool, is_execable: bool) {
+    ///  - `entry`: The offset of the entry point, pass `None` if no entry point.
+    ///
+    /// # Errors
+    /// This will return error once these happened:
+    ///  - Provide an entry address which is unloadable or unexecable;
+    /// 
+    /// # Note
+    /// If you try to provide a name which is over than 16 bytes, it may truncated.
+    pub fn append(
+        &mut self,
+        data: &'a [u8],
+        name: &str,
+        is_loadable: bool,
+        is_execable: bool,
+        entry: Option<u32>,
+    ) -> Result<(), Error> {
+        // Check: Is entry is Some(...) within unloadable & unexecable
+        if entry.is_some() && !(is_execable || is_loadable) {
+            return Err(Error::ExecutableCorrupted);
+        }
+
         let section = InnerSections {
             secinfo: Section {
                 name: str_to_array(name),
@@ -299,6 +307,7 @@ impl<'a> Builder<'a> {
             data,
         };
         self.sections.push(section);
+        Ok(())
     }
 
     /// Build the whole file to a valid exec format.
@@ -370,8 +379,9 @@ pub enum Error {
 
     /// The section which is corrupted.
     ///
-    /// Will appear if the buffer size is lower than specified
-    /// length.
+    /// Will appear if:  
+    ///  - The buffer size is lower than specified length;
+    ///  - Append an unexecable and unloadable section within an entry address (`Builder` only).
     ExecutableCorrupted,
 
     /// An unknown character in UTF-8 was found in
@@ -387,5 +397,7 @@ pub enum Error {
     ArgsTooLong,
 
     /// No sections in the current executable.
+    /// 
+    /// Will appear if you try to build without any appending.
     NoSections,
 }
