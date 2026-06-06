@@ -1,5 +1,6 @@
 //! The definitions of section entry.
 use crate::{HEADER_SIZE, SECTION_SIZE};
+use core::ops::Index;
 
 /// A section entry.
 #[repr(C, packed)]
@@ -62,7 +63,7 @@ impl<'a> SectionIter<'a> {
     }
 }
 
-// Iterator implementations
+/// Iterator implementations.
 impl<'a> Iterator for SectionIter<'a> {
     type Item = Section;
 
@@ -81,5 +82,28 @@ impl<'a> Iterator for SectionIter<'a> {
         // Plus current value and return
         self.current += 1;
         Some(section)
+    }
+}
+
+/// The index implementations.
+///
+/// # Panics
+/// This will panic if your index is over than the length.
+impl Index<usize> for SectionIter<'_> {
+    type Output = Section;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        // Check: Is index out if bounds
+        if index >= self.total as usize {
+            panic!("proka-exec: index out of bounds, the max size is {}, but index {} was got.", self.total, index)
+        }
+
+        // Calculate target
+        let base = HEADER_SIZE;
+        let target = base + index * SECTION_SIZE;
+
+        // Get and convert
+        let buf = &self.buf[target..target + SECTION_SIZE];
+        unsafe { &*(buf.as_ptr() as *const Section) }
     }
 }
