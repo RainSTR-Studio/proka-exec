@@ -10,7 +10,7 @@ fn buildpke() -> Vec<u8> {
     builder.set_name("testapp");
     builder.set_max([0, 2, 0]);
     builder.set_min([0, 1, 0]);
-    builder.append(&TEXT, ".text", true, true, None).unwrap();
+    builder.append(&TEXT, ".text", true, true, Some(0)).unwrap();
     builder.append(&DATA, ".data", true, false, None).unwrap();
 
     builder.build().unwrap()
@@ -64,6 +64,4 @@ fn test_is_content_correct() {
             assert_eq!(content, &DATA);
         }
     }
-
-    // Test ".data"
 }

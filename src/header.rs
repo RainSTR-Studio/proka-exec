@@ -29,8 +29,11 @@ pub struct Header {
     /// The section table count.
     pub sections: u16,
 
-    /// The entry point address.
-    pub entry: u32,
+    /// The section which contains the entry point.
+    pub entry_sec: u16,
+
+    /// The entry offset of the section.
+    pub entry_off: u32,
 
     /// The author name (max length is 32 bytes).
     pub author: [u8; 32],
@@ -38,8 +41,8 @@ pub struct Header {
     /// The executable/project name.
     pub name: [u8; 32],
 
-    /// Extended bits for different mode parsing.
-    pub extended: [u8; 38],
+    /// Extended bits for different mode parsing (reserved).
+    pub extended: [u8; 36],
 }
 
 impl Default for Header {
@@ -57,10 +60,11 @@ impl Header {
             max: [0; 3],
             mode: ExecMode::UserApp,
             sections: 0,
-            entry: HEADER_SIZE as u32,
+            entry_sec: 0,
+            entry_off: HEADER_SIZE as u32,
             author: [0; 32],
             name: [0; 32],
-            extended: [0u8; 38],
+            extended: [0u8; 36],
         }
     }
 

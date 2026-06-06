@@ -80,28 +80,6 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    /// Initialize the parser by passing a slice without checking.
-    ///
-    /// # Safety
-    /// You must ensure these if you invoke this function:
-    ///
-    ///  - The slice's content is a valid proka executable (match the magic);
-    ///  - The slice must contain the header and all section tables.
-    ///
-    /// # Note
-    /// Use this function to initialize is **NOT** recommended, because it might  
-    /// cause some problems while parsing this header.
-    pub unsafe fn init_unchecked(buf: &'a [u8]) -> Self {
-        let header_raw = &buf[0..HEADER_SIZE];
-        let header = unsafe { *(header_raw.as_ptr() as *const Header) };
-
-        Self {
-            buf,
-            header,
-            total_sections: header.sections,
-        }
-    }
-
     /// Initialize the parser by passing a slice.
     ///
     /// This is the recommended way to initialize this parser, because it will
@@ -130,6 +108,28 @@ impl<'a> Parser<'a> {
         unsafe { Ok(Self::init_unchecked(buf)) }
     }
 
+    /// Initialize the parser by passing a slice without checking.
+    ///
+    /// # Safety
+    /// You must ensure these if you invoke this function:
+    ///
+    ///  - The slice's content is a valid proka executable (match the magic);
+    ///  - The slice must contain the header and all section tables.
+    ///
+    /// # Note
+    /// Use this function to initialize is **NOT** recommended, because it might
+    /// cause some problems while parsing this header.
+    pub unsafe fn init_unchecked(buf: &'a [u8]) -> Self {
+        let header_raw = &buf[0..HEADER_SIZE];
+        let header = unsafe { *(header_raw.as_ptr() as *const Header) };
+
+        Self {
+            buf,
+            header,
+            total_sections: header.sections,
+        }
+    }
+
     /// Do more validation after initialization.
     ///
     /// # Content
@@ -137,8 +137,9 @@ impl<'a> Parser<'a> {
     ///
     ///  - Is the header min >= max;
     ///  - Is each section's base correct;
-    ///  - Is the section's length not zeroed.
-    ///  - Is section base out of length.
+    ///  - Is the section's length not zeroed;
+    ///  - Is section base out of length;
+    ///  - Is entry_off is over than section length.
     pub fn validate(&self) -> bool {
         // Check: Is header's min > max
         let minimal = self.header.min;
@@ -151,9 +152,10 @@ impl<'a> Parser<'a> {
 
         // Check: Is each section's base and length correct
         let min_base = HEADER_SIZE + self.header.sections as usize * SECTION_SIZE;
-        for section in self.sections() {
+        for (index, section) in self.sections().enumerate() {
             let base_off = section.base as usize;
             let len = section.length as usize;
+            let entry_sec = self.header.entry_sec as usize;
 
             if base_off < min_base
                 || base_off + len > self.buf.len()
@@ -161,6 +163,15 @@ impl<'a> Parser<'a> {
                 || !section.validate()
             {
                 return false;
+            }
+
+            // Also at here, we'd like to check the entry_off
+            // overflow or not.
+            if index == entry_sec {
+                let entry_off = self.header.entry_off as usize;
+                if entry_off > len {
+                    return false;
+                }
             }
         }
 
@@ -287,7 +298,7 @@ impl<'a> Builder<'a> {
     /// # Note
     ///  - If you try to provide a name which is over than 16 bytes, it may truncated;
     ///  - If you provide the entry offset for multiple times, once you invoke `build()`, it will
-    ///  use that latest set one.
+    ///    use that latest set one.
     pub fn append(
         &mut self,
         data: &'a [u8],
@@ -306,7 +317,7 @@ impl<'a> Builder<'a> {
                 name: str_to_array(name),
                 is_loadable,
                 is_execable,
-                base: HEADER_SIZE as u32, // Will replace during building...
+                base: 0,    // Will replace during building...
                 length: data.len() as u32,
                 _reserved: [0; 6],
             },
@@ -336,24 +347,15 @@ impl<'a> Builder<'a> {
 
         // Then create up a header and push into data...
         {
-            // Calculate the absolute offset of entry...
-            let sections = self.sections.len();
-            let entry = {
-                let metalen = HEADER_SIZE + sections * SECTION_SIZE;
-                let datasum: usize = self.sections
-                    .iter()
-                    .map(|s| s.data.len())
-                    .sum();
-                (metalen + datasum) as u32 + self.entry.0
-            };
             let header = Header {
                 min: self.min,
                 max: self.max,
-                entry: entry,
+                entry_off: self.entry.0,
+                entry_sec: self.entry.1 as u16,
                 mode: self.mode,
                 author: str_to_array(self.author.as_str()),
                 name: str_to_array(self.name.as_str()),
-                sections: sections as u16,
+                sections: self.sections.len() as u16,
                 ..Default::default()
             }
             .to_array();
@@ -366,7 +368,7 @@ impl<'a> Builder<'a> {
             let mut secinfo = section.secinfo;
 
             // Update base...
-            secinfo.base += (self.sections.len() * SECTION_SIZE + cnt) as u32;
+            secinfo.base = (HEADER_SIZE + self.sections.len() * SECTION_SIZE + cnt) as u32;
 
             // Push...
             data.extend_from_slice(&secinfo.to_array());
@@ -375,7 +377,7 @@ impl<'a> Builder<'a> {
 
         // And each section's data...
         for section in &self.sections {
-            data.extend_from_slice(&section.data);
+            data.extend_from_slice(section.data);
         }
 
         // Return
