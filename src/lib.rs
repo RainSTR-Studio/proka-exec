@@ -209,7 +209,7 @@ impl<'a> Parser<'a> {
 pub struct Builder<'a> {
     min: [u16; 3],
     max: [u16; 3],
-    entry: u32,
+    entry: (u32, usize), // (offset, index)
     author: String,
     name: String,
     mode: ExecMode,
@@ -230,7 +230,7 @@ impl<'a> Builder<'a> {
         Self {
             min: [0; 3],
             max: [0; 3],
-            entry: 0,
+            entry: (0, 0),
             author: String::new(),
             name: String::new(),
             mode: ExecMode::UserApp,
@@ -240,14 +240,18 @@ impl<'a> Builder<'a> {
 
     /// Set up the author.
     ///
-    /// Will return error if length is > 32.
+    /// # Note
+    /// If the author that you provide is longer than 32,
+    /// it may truncated.
     pub fn set_author(&mut self, author: &str) {
         self.author = author.to_string();
     }
 
     /// Set up the program name.
     ///
-    /// Will return error if length is > 32.
+    /// # Note
+    /// If the author that you provide is longer than 32,
+    /// it may truncated.
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_string();
     }
@@ -279,9 +283,11 @@ impl<'a> Builder<'a> {
     /// # Errors
     /// This will return error once these happened:
     ///  - Provide an entry address which is unloadable or unexecable;
-    /// 
+    ///
     /// # Note
-    /// If you try to provide a name which is over than 16 bytes, it may truncated.
+    ///  - If you try to provide a name which is over than 16 bytes, it may truncated;
+    ///  - If you provide the entry offset for multiple times, once you invoke `build()`, it will
+    ///  use that latest set one.
     pub fn append(
         &mut self,
         data: &'a [u8],
@@ -291,7 +297,7 @@ impl<'a> Builder<'a> {
         entry: Option<u32>,
     ) -> Result<(), Error> {
         // Check: Is entry is Some(...) within unloadable & unexecable
-        if entry.is_some() && !(is_execable || is_loadable) {
+        if entry.is_some() && !(is_execable && is_loadable) {
             return Err(Error::ExecutableCorrupted);
         }
 
@@ -307,6 +313,12 @@ impl<'a> Builder<'a> {
             data,
         };
         self.sections.push(section);
+
+        // Set entry if Some(...)...
+        if let Some(ent_offset) = entry {
+            let sec_index = self.sections.len() - 1;
+            self.entry = (ent_offset, sec_index);
+        }
         Ok(())
     }
 
@@ -324,14 +336,24 @@ impl<'a> Builder<'a> {
 
         // Then create up a header and push into data...
         {
+            // Calculate the absolute offset of entry...
+            let sections = self.sections.len();
+            let entry = {
+                let metalen = HEADER_SIZE + sections * SECTION_SIZE;
+                let datasum: usize = self.sections
+                    .iter()
+                    .map(|s| s.data.len())
+                    .sum();
+                (metalen + datasum) as u32 + self.entry.0
+            };
             let header = Header {
                 min: self.min,
                 max: self.max,
-                entry: self.entry,
+                entry: entry,
                 mode: self.mode,
                 author: str_to_array(self.author.as_str()),
                 name: str_to_array(self.name.as_str()),
-                sections: self.sections.len() as u16,
+                sections: sections as u16,
                 ..Default::default()
             }
             .to_array();
@@ -397,7 +419,7 @@ pub enum Error {
     ArgsTooLong,
 
     /// No sections in the current executable.
-    /// 
+    ///
     /// Will appear if you try to build without any appending.
     NoSections,
 }
