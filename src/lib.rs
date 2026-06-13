@@ -7,7 +7,7 @@
 //! [![GitHub Pull Requests](https://img.shields.io/github/issues-pr/RainSTR-Studio/proka-exec?style=flat-square)](https://github.com/RainSTR-Studio/proka-exec/pulls)
 //! [![Documentation](https://img.shields.io/badge/docs-prokadoc-brightgreen?style=flat-square)](https://prokadoc.pages.dev/)
 //!
-//! Copyright (C) 2026 RainSTR Studio. All rights reserved.
+//! Copyright (C) 2026 RainSTR Studio. Licensed under GNU GPLv3.
 //!
 //! ---
 //!
