@@ -1,6 +1,30 @@
 //! The definitions of section entry.
-use crate::{HEADER_SIZE, SECTION_SIZE};
+use crate::{HEADER_SIZE, Result, Error, SECTION_SIZE};
 use core::ops::Index;
+
+/// Errors in section
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SectionError {
+    /// Section length error.
+    ///
+    /// Will appear if recorded section length is 0.
+    LengthError,
+
+    /// Section base error.
+    ///
+    /// Will appear if specified section base is lower than metadata length (128+32).
+    ///
+    /// Contains the incorrect base.
+    BaseError(u32),
+
+
+    /// Entry offset out of range.
+    /// 
+    /// Will appear if entry offset is out of range of the section.
+    /// 
+    /// Contains the incorrect entry offset (0) and the section length (1).
+    EntryOffsetOutOfRange(u32, u32),
+}
 
 /// A section entry.
 #[repr(C, packed)]
@@ -35,14 +59,18 @@ impl Section {
 
     /// Validate is this section not corrupted.
     #[inline]
-    pub fn validate(&self) -> bool {
-        // Length cannot be 0
-        let length_ok = self.length != 0;
+    pub fn validate(&self) -> Result<()> {
+        // Check: Is length 0
+        if self.length == 0 {
+            return Err(Error::SectionError(SectionError::LengthError));
+        }
 
-        // First check: base must >= 128+32
-        let base_ok = self.base as usize >= (HEADER_SIZE + SECTION_SIZE);
+        // Check: Is base lower than metadata length (128+32)
+        if self.base as usize >= (HEADER_SIZE + SECTION_SIZE) {
+            return Err(Error::SectionError(SectionError::BaseError(self.base)));
+        }
 
-        length_ok || base_ok
+        Ok(())
     }
 }
 
@@ -95,7 +123,10 @@ impl Index<usize> for SectionIter<'_> {
     fn index(&self, index: usize) -> &Self::Output {
         // Check: Is index out if bounds
         if index >= self.total as usize {
-            panic!("proka-exec: index out of bounds, the max size is {}, but index {} was got.", self.total, index)
+            panic!(
+                "proka-exec: index out of bounds, the max size is {}, but index {} was got.",
+                self.total, index
+            )
         }
 
         // Calculate target

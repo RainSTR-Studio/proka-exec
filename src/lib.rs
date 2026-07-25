@@ -20,8 +20,18 @@
 //! Before you parse it, you should do these steps:
 //!
 //! - Read the executable file content;
-//! - Make this file's content to a slice (`&'static [u8]`)
+//! - Make this file's content to a slice (`&[u8]`)
 //! - Use [`Parser`] to parse the executable.
+//!
+//! ## Example Usage
+//! ```rust, ignore
+//! use proka_exec::Parser;
+//! use std::path::PathBuf;
+//!
+//! let file = PathBuf::from("example.pke");
+//! let content = std::fs::read(file).expect("Failed to read file");
+//! let parser = Parser::init(&content).expect("Failed to parse parser");
+//! ```
 //!
 //! After this, you can do further operations through this parser by
 //! calling its functions.
@@ -56,8 +66,13 @@ use alloc::{
     vec::Vec,
 };
 use header::{ExecMode, Header};
-use sections::{Section, SectionIter};
+use sections::{Section, SectionError, SectionIter};
 pub use utils::*;
+
+use crate::header::HeaderError;
+
+/// Generic result type in this crate
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// The header size.
 pub const HEADER_SIZE: usize = core::mem::size_of::<Header>();
@@ -89,12 +104,12 @@ impl<'a> Parser<'a> {
     /// # Note
     /// If this crate is used on the kernel-side, you must first map the memory
     /// that the slice points to before invoking this function.
-    pub fn init(buf: &'a [u8]) -> Result<Self, Error> {
+    pub fn init(buf: &'a [u8]) -> Result<Self> {
         let header_raw = &buf[0..HEADER_SIZE]; // Header length
         let header = unsafe { *(header_raw.as_ptr() as *const Header) };
 
         // Check: Validate is this correct executable
-        if !header.validate() {
+        if header.validate().is_err() {
             return Err(Error::NotValidExecutable);
         }
 
@@ -140,43 +155,49 @@ impl<'a> Parser<'a> {
     ///  - Is the section's length not zeroed;
     ///  - Is section base out of length;
     ///  - Is entry_off is over than section length.
-    pub fn validate(&self) -> bool {
+    pub fn validate(&self) -> Result<()> {
         // Check: Is header's min > max
         let minimal = self.header.min;
         let maximum = self.header.max;
         for (&min, &max) in minimal.iter().zip(maximum.iter()) {
             if min > max {
-                return false;
+                return Err(Error::VersionIncorrect(minimal, maximum));
             }
         }
 
-        // Check: Is each section's base and length correct
+        // Check: Is each section's base and length correct (section check)
         let min_base = HEADER_SIZE + self.header.sections as usize * SECTION_SIZE;
         for (index, section) in self.sections().enumerate() {
             let base_off = section.base as usize;
             let len = section.length as usize;
             let entry_sec = self.header.entry_sec as usize;
 
-            if base_off < min_base
-                || base_off + len > self.buf.len()
-                || len == 0
-                || !section.validate()
-            {
-                return false;
+            // Check: Is section base in metadata range
+            if base_off < min_base {
+                return Err(Error::SectionError(SectionError::BaseError(
+                    base_off as u32,
+                )));
             }
 
-            // Also at here, we'd like to check the entry_off
-            // overflow or not.
+            // Check: Is section length not zeroed
+            if len == 0 {
+                return Err(Error::SectionError(SectionError::LengthError));
+            }
+
+            // Check: Is section entry_off out of range
             if index == entry_sec {
                 let entry_off = self.header.entry_off as usize;
                 if entry_off > len {
-                    return false;
+                    return Err(Error::SectionError(SectionError::EntryOffsetOutOfRange(
+                        entry_off as u32,
+                        len as u32,
+                    )));
                 }
             }
         }
 
         // All's fine :)
-        true
+        Ok(())
     }
 
     /// Get the content from specified sections.
@@ -306,7 +327,7 @@ impl<'a> Builder<'a> {
         is_loadable: bool,
         is_execable: bool,
         entry: Option<u32>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         // Check: Is entry is Some(...) within unloadable & unexecable
         if entry.is_some() && !(is_execable && is_loadable) {
             return Err(Error::ExecutableCorrupted);
@@ -317,7 +338,7 @@ impl<'a> Builder<'a> {
                 name: str_to_array(name),
                 is_loadable,
                 is_execable,
-                base: 0,    // Will replace during building...
+                base: 0, // Will replace during building...
                 length: data.len() as u32,
                 _reserved: [0; 6],
             },
@@ -336,10 +357,17 @@ impl<'a> Builder<'a> {
     /// Build the whole file to a valid exec format.
     ///
     /// Will return error if no section was appended.
-    pub fn build(self) -> Result<Vec<u8>, Error> {
+    pub fn build(self) -> Result<Vec<u8>> {
         // Check: Is section list empty
         if self.sections.is_empty() {
             return Err(Error::NoSections);
+        }
+
+        // Check: Is min version lower than max version
+        for (&min, &max) in self.min.iter().zip(self.max.iter()) {
+            if min > max {
+                return Err(Error::VersionIncorrect(self.min, self.max));
+            }
         }
 
         // Create up a data...
@@ -396,6 +424,16 @@ struct InnerSections<'a> {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
+    /// Section inner error.
+    ///
+    /// See [`self::section::SectionError`] for more details.
+    SectionError(SectionError),
+
+    /// Header inner error.
+    /// 
+    /// See [`self::header::HeaderError`] for more details.
+    HeaderError(HeaderError),
+
     /// The executable is not valid
     ///
     /// Will appear if magic is not correct.
@@ -407,6 +445,17 @@ pub enum Error {
     ///  - The buffer size is lower than specified length;
     ///  - Append an unexecable and unloadable section within an entry address (`Builder` only).
     ExecutableCorrupted,
+
+    /// The version that was written in file is incorrect.
+    ///
+    /// Will appear if:
+    ///  - The max version is lower than the min version;
+    ///  - Passing a max version which is lower than min version (`Builder` only).
+    ///
+    /// # Arguments
+    ///  - 0: The min version;
+    ///  - 1: The max version.
+    VersionIncorrect([u16; 3], [u16; 3]),
 
     /// An unknown character in UTF-8 was found in
     /// parsing arrays

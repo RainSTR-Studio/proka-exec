@@ -1,8 +1,17 @@
 //! The header definitions.
-use crate::HEADER_SIZE;
+use crate::{HEADER_SIZE, Result, Error};
 
 /// The magic number, fixed to 'PKEX'
 pub const PKEX_MAGIC: u32 = 0x58454B50;
+
+/// Error types in header.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderError {
+    /// Magic number error.
+    /// 
+    /// Contains the incorrect magic number.
+    MagicNumberError(u32),
+}
 
 /// The main header struct, which contains the metadata of the PKE file.
 #[repr(C, packed)]
@@ -70,8 +79,11 @@ impl Header {
 
     /// Validate is this a valid proka executable.
     #[inline]
-    pub fn validate(&self) -> bool {
-        self.magic == PKEX_MAGIC
+    pub fn validate(&self) -> Result<()> {
+        if self.magic != PKEX_MAGIC {
+            return Err(Error::HeaderError(HeaderError::MagicNumberError(self.magic)));
+        }
+        Ok(())
     }
 
     /// Convert this header to array

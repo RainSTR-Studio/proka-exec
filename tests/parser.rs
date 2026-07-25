@@ -19,7 +19,7 @@ fn test_is_init_work() {
 fn test_is_validation_correct() {
     let parser = init();
     let result = parser.validate();
-    assert_eq!(result, true);
+    assert_eq!(result, Ok(()));
 }
 
 #[test]

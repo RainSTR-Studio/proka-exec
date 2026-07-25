@@ -23,7 +23,7 @@ fn test_is_built_exec_parsable() {
     // Use parser to parse the thing...
     let parser = Parser::init(&data).expect("Error occoured during parsing generated header");
     let result = parser.validate();
-    assert_eq!(result, true)
+    assert_eq!(result, Ok(()))
 }
 
 #[test]
