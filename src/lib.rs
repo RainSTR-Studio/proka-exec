@@ -22,6 +22,9 @@
 //! - Read the executable file content;
 //! - Make this file's content to a slice (`&[u8]`)
 //! - Use [`Parser`] to parse the executable.
+//! 
+//! After this, you can do further operations through this parser by
+//! calling its functions.
 //!
 //! ## Example Usage
 //! ```rust, ignore
@@ -32,9 +35,6 @@
 //! let content = std::fs::read(file).expect("Failed to read file");
 //! let parser = Parser::init(&content).expect("Failed to parse parser");
 //! ```
-//!
-//! After this, you can do further operations through this parser by
-//! calling its functions.
 //!
 //! ### Note
 //! If you want to do minimal reading, you can just read the header and
@@ -68,8 +68,7 @@ use alloc::{
 use header::{ExecMode, Header};
 use sections::{Section, SectionError, SectionIter};
 pub use utils::*;
-
-use crate::header::HeaderError;
+use header::HeaderError;
 
 /// Generic result type in this crate
 pub type Result<T> = core::result::Result<T, Error>;
@@ -79,6 +78,61 @@ pub const HEADER_SIZE: usize = core::mem::size_of::<Header>();
 
 /// The section entry size
 pub const SECTION_SIZE: usize = core::mem::size_of::<Section>();
+
+/// The error type of parsing header.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Error {
+    /// Section inner error.
+    ///
+    /// See [`SectionError`] for more details.
+    SectionError(SectionError),
+
+    /// Header inner error.
+    ///
+    /// See [`HeaderError`] for more details.
+    HeaderError(HeaderError),
+
+    /// The executable is not valid
+    ///
+    /// Will appear if magic is not correct.
+    NotValidExecutable,
+
+    /// The section which is corrupted.
+    ///
+    /// Will appear if:  
+    ///  - The buffer size is lower than specified length;
+    ///  - Append an unexecable and unloadable section within an entry address (`Builder` only).
+    ExecutableCorrupted,
+
+    /// The version that was written in file is incorrect.
+    ///
+    /// Will appear if:
+    ///  - The max version is lower than the min version;
+    ///  - Passing a max version which is lower than min version (`Builder` only).
+    ///
+    /// # Arguments
+    ///  - 0: The min version;
+    ///  - 1: The max version.
+    VersionIncorrect([u16; 3], [u16; 3]),
+
+    /// An unknown character in UTF-8 was found in
+    /// parsing arrays
+    ///
+    /// May appear in converting slice to `&str`.
+    UnknownCharacter,
+
+    /// The argument which gives is too long.
+    ///
+    /// For example, if a field, which require at most 16 bytes, but you gave
+    /// 17 bytes, it will return this error.
+    ArgsTooLong,
+
+    /// No sections in the current executable.
+    ///
+    /// Will appear if you try to build without any appending.
+    NoSections,
+}
 
 /// The parser of the proka executable.
 ///
@@ -418,59 +472,4 @@ impl<'a> Builder<'a> {
 struct InnerSections<'a> {
     pub secinfo: Section,
     pub data: &'a [u8],
-}
-
-/// The error type of parsing header.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    /// Section inner error.
-    ///
-    /// See [`self::section::SectionError`] for more details.
-    SectionError(SectionError),
-
-    /// Header inner error.
-    /// 
-    /// See [`self::header::HeaderError`] for more details.
-    HeaderError(HeaderError),
-
-    /// The executable is not valid
-    ///
-    /// Will appear if magic is not correct.
-    NotValidExecutable,
-
-    /// The section which is corrupted.
-    ///
-    /// Will appear if:  
-    ///  - The buffer size is lower than specified length;
-    ///  - Append an unexecable and unloadable section within an entry address (`Builder` only).
-    ExecutableCorrupted,
-
-    /// The version that was written in file is incorrect.
-    ///
-    /// Will appear if:
-    ///  - The max version is lower than the min version;
-    ///  - Passing a max version which is lower than min version (`Builder` only).
-    ///
-    /// # Arguments
-    ///  - 0: The min version;
-    ///  - 1: The max version.
-    VersionIncorrect([u16; 3], [u16; 3]),
-
-    /// An unknown character in UTF-8 was found in
-    /// parsing arrays
-    ///
-    /// May appear in converting slice to `&str`.
-    UnknownCharacter,
-
-    /// The argument which gives is too long.
-    ///
-    /// For example, if a field, which require at most 16 bytes, but you gave
-    /// 17 bytes, it will return this error.
-    ArgsTooLong,
-
-    /// No sections in the current executable.
-    ///
-    /// Will appear if you try to build without any appending.
-    NoSections,
 }
