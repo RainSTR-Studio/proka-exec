@@ -12,9 +12,26 @@
 //! ---
 //!
 //! ## Introduction
-//! This crate provides the definitions of headers, section
-//! entrys, and some utils to help you parse the executable
-//! easily.
+//! This crate provides the definitions of headers, section index, section metadata,
+//! and some utils to help you parse the executable easily.
+//! 
+//! ## Structures of this executable
+//! This executable is structured as follows:
+//! - PKE headers - Records the basic information of this executable;
+//! - Section index - Records the section header's offset and section name's length;
+//! - Section metadata- Records the section flags, data offset and its length;
+//! - Data - The binary content.
+//! 
+//! We can use this picture to explain their segmented structure:
+//! 
+//! `[Headers] [Section Index] [Section Metadata] [Data]`
+//! 
+//! Simultaneously, the `[Section Metadata]` can be separated as follows:
+//! 
+//! `[Section Headers] [Section Name]`
+//! 
+//! In the picture above, the `[Section Headers]`'s length is fixed, which is recorded in [`SECTION_HDR_SIZE`]; 
+//! The section name is different - It's dynamic, so you can store almost infinite words in it!
 //!
 //! ## Steps to use this crate
 //! Before you parse it, you should do these steps:
@@ -34,13 +51,9 @@
 //! let file = PathBuf::from("example.pke");
 //! let content = std::fs::read(file).expect("Failed to read file");
 //! let parser = Parser::init(&content).expect("Failed to parse parser");
+//! 
+//! // More API see below
 //! ```
-//!
-//! ### Note
-//! If you want to do minimal reading, you can just read the header and
-//! section table, other content can be read later;
-//!
-//! Make sure you have read the header and each sections, and they are **NOT** optional!!!
 //!
 //! # LICENSE
 //! This crate is under license [GPL-v3](https://github.com/RainSTR-Studio/proka-exec/blob/main/LICENSE),

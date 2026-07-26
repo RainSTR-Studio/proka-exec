@@ -17,6 +17,22 @@ and some utilities to help you parse the proka executable file easily.
 
 Please note that this project is written in **Rust**, so you can use this crate through [crates.io](https://crates.io) and `cargo` to use this crate.
 
+## Structures of this executable
+This executable is structured as follows:
+- PKE Headers - Records the basic information of this executable;
+- Section index - Records the section header's offset and section name's length;
+- Section metadata- Records the section flags, data offset and its length;
+- Data - The binary content.
+
+We can use this picture to explain their segmented structure:
+`[Headers] [Section Index] [Section Metadata] [Data]`
+
+Also, the `[Section Metadata]` can be separated as follows:
+`[Section Headers] [Section Name]`
+
+In the picture above, the `[Section Headers]`'s length is fixed, which is recorded in [`SECTION_HDR_SIZE`]; 
+The section name is different - It's dynamic, so you can store almost infinite words in it!
+
 ## Contributing
 Thank you to all contributors!
 
