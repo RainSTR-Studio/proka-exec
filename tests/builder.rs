@@ -1,5 +1,5 @@
 //! The testing of Builder.
-use proka_exec::{Builder, Parser, slice_to_str, str_to_array};
+use proka_exec::{Builder, Parser, sections::SectionFlag, str_to_array};
 
 static TEXT: [u8; 8] = [0xeb, 0xfe, 0x66, 0x90, 0x00, 0x00, 0x00, 0x00];
 static DATA: [u8; 8] = [0x01, 0x02, 0x03, 0x04, 0x05, 0x11, 0x45, 0x14];
@@ -52,13 +52,13 @@ fn test_is_content_correct() {
 
     // And test each sections...
     for section in parser.sections() {
-        let raw_name = section.name;
-        let name = slice_to_str(&raw_name).unwrap();
+        let table = parser.sections();
+        let name = table.get_name_secindex(section);
 
         // Get its content
         let content = parser.get_section_content(name).unwrap();
 
-        if raw_name == str_to_array(".text") {
+        if name == ".text" {
             assert_eq!(content, &TEXT);
         } else {
             assert_eq!(content, &DATA);
@@ -72,34 +72,47 @@ fn test_is_index_work() {
     let parser = Parser::init(&data).expect("Parse failed");
 
     // Get section .text (index 0)
-    let section = parser.sections()[0];
+    let section = parser.sections().get(0).unwrap();
 
     // Let me see is its name correct...
-    let name = section.name;
-    let is_loadable = section.is_loadable;
-    let is_execable = section.is_execable;
-    assert_eq!(name, str_to_array(".text"));
+    let table = parser.sections();
+    let name = table.get_name_secindex(section);
+    let is_loadable = table
+        .get_hdr_secindex(section)
+        .flag
+        .contains(SectionFlag::LOADABLE);
+    let is_execable = table
+        .get_hdr_secindex(section)
+        .flag
+        .contains(SectionFlag::EXECABLE);
+    assert_eq!(name, ".text");
     assert_eq!(is_loadable, true);
     assert_eq!(is_execable, true);
 
     // If this passed, why not continue check .data?
-    let section = parser.sections()[1];
+    let section = parser.sections().get(1).unwrap();
 
     // Assert...
-    let name = section.name;
-    let is_loadable = section.is_loadable;
-    let is_execable = section.is_execable;
-    assert_eq!(name, str_to_array(".data"));
+    let name = table.get_name_secindex(section);
+    let is_loadable = table
+        .get_hdr_secindex(section)
+        .flag
+        .contains(SectionFlag::LOADABLE);
+    let is_execable = table
+        .get_hdr_secindex(section)
+        .flag
+        .contains(SectionFlag::EXECABLE);
+    assert_eq!(name, ".data");
     assert_eq!(is_loadable, true);
     assert_eq!(is_execable, false);
 }
 
-#[should_panic(expected = "index out of bounds")]
+#[should_panic]
 #[test]
 fn test_index_out_of_bound() {
     let data = buildpke();
     let parser = Parser::init(&data).expect("Parse failed");
 
     // Get an error index...
-    parser.sections()[2];   // Should panic!
+    parser.sections().get(2).unwrap(); // Should panic!
 }

@@ -1,6 +1,7 @@
 //! The definitions of section entry.
-use crate::{HEADER_SIZE, Result, Error, SECTION_SIZE};
-use core::ops::Index;
+use crate::{Error, HEADER_SIZE, Result, SECTION_HDR_SIZE, SECTION_INDEX_SIZE, slice_to_str};
+use bitflags::bitflags;
+use bytemuck::{Pod, Zeroable};
 
 /// Errors in section
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,124 +18,175 @@ pub enum SectionError {
     /// Contains the incorrect base.
     BaseError(u32),
 
-
     /// Entry offset out of range.
-    /// 
+    ///
     /// Will appear if entry offset is out of range of the section.
-    /// 
+    ///
     /// Contains the incorrect entry offset (0) and the section length (1).
     EntryOffsetOutOfRange(u32, u32),
 }
 
 /// A section entry.
-#[repr(C, packed)]
-#[derive(Debug, Clone, Copy)]
-pub struct Section {
-    /// The section name (16 bytes max).
-    pub name: [u8; 16],
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct SectionHdr {
+    /// The flag of the section.
+    pub flag: SectionFlag,
 
-    /// Assign is this section loadable
-    pub is_loadable: bool,
-
-    /// Assign is this section executable
-    pub is_execable: bool,
+    /// Paddings of header.
+    pub _pad1: [u8; 3],
 
     /// The offset of the section start.
     pub base: u32,
 
-    /// The length of the section.
-    pub length: u32,
+    /// The size of the section.
+    pub size: u32,
 
-    /// Reserved bits
-    pub _reserved: [u8; 6],
+    /// Paddings of header.
+    pub _pad2: [u8; 4],
 }
 
-impl Section {
+bitflags! {
+    /// Flags of this section.
+    #[repr(transparent)]
+    #[derive(Debug, Clone, Copy, Pod, Zeroable)]
+    pub struct SectionFlag: u8 {
+        /// The section is loadable.
+        const LOADABLE = 1;
+
+        /// The section is executable.
+        const EXECABLE = 1 << 1;
+    }
+}
+
+impl SectionHdr {
     /// Convert this object to array.
     #[inline]
-    pub const fn to_array(&self) -> [u8; SECTION_SIZE] {
+    pub const fn to_array(&self) -> [u8; SECTION_HDR_SIZE] {
         // SAFETY: used `#[repr(C)]`
-        unsafe { core::ptr::read(self as *const Self as *const [u8; SECTION_SIZE]) }
+        unsafe { core::ptr::read(self as *const Self as *const [u8; SECTION_HDR_SIZE]) }
     }
 
     /// Validate is this section not corrupted.
     #[inline]
     pub fn validate(&self) -> Result<()> {
-        // Check: Is length 0
-        if self.length == 0 {
+        // Check: Is size 0
+        if self.size == 0 {
             return Err(Error::SectionError(SectionError::LengthError));
-        }
-
-        // Check: Is base lower than metadata length (128+32)
-        if self.base as usize >= (HEADER_SIZE + SECTION_SIZE) {
-            return Err(Error::SectionError(SectionError::BaseError(self.base)));
         }
 
         Ok(())
     }
 }
 
+/// The index of each section entry.
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct SectionIndex {
+    /// The base offset of the section header ([`SectionHdr`]).
+    pub base: u32,
+
+    /// The total length of the section name.
+    pub name_len: u32,
+}
+
+impl SectionIndex {
+    /// Convert this object to array.
+    #[inline]
+    pub const fn to_array(&self) -> [u8; SECTION_INDEX_SIZE] {
+        // SAFETY: used `#[repr(C)]`
+        unsafe { core::ptr::read(self as *const Self as *const [u8; SECTION_INDEX_SIZE]) }
+    }
+}
+
 /// The iterator of each sections
 #[derive(Debug, Clone, Copy)]
-pub struct SectionIter<'a> {
+pub struct SectionTable<'a> {
     buf: &'a [u8],
     total: u16,
     current: u16,
 }
-impl<'a> SectionIter<'a> {
-    pub(crate) fn new(buf: &'a [u8], total: u16, current: u16) -> Self {
+
+impl<'a> SectionTable<'a> {
+    /// Create a new object of this table.
+    pub(crate) fn new(buf: &'a [u8], total: u16) -> Self {
         Self {
             buf,
             total,
-            current,
+            current: 0,
         }
     }
-}
 
-/// Iterator implementations.
-impl<'a> Iterator for SectionIter<'a> {
-    type Item = Section;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Check: is current over than total
-        if self.current >= self.total {
+    /// A safe way to get [`SectionIndex`] by index.
+    pub fn get(&self, index: usize) -> Option<SectionIndex> {
+        // Check: Is given index out of bounds?
+        if index >= self.total as usize {
             return None;
         }
 
-        let base = HEADER_SIZE + self.current as usize * SECTION_SIZE;
-        let buf = &self.buf[base..base + SECTION_SIZE];
+        // Get the section index content
+        let offset = HEADER_SIZE + index * SECTION_INDEX_SIZE;
+        let slice = &self.buf[offset..offset + SECTION_INDEX_SIZE];
 
-        // Now convert it
-        let section = unsafe { *(buf.as_ptr() as *const Section) };
+        // Initialize and copy content to entry
+        let mut section_index = SectionIndex::zeroed();
+        bytemuck::bytes_of_mut(&mut section_index).copy_from_slice(slice);
+        Some(section_index)
+    }
 
-        // Plus current value and return
-        self.current += 1;
-        Some(section)
+    /// Get the section header by using [`SectionIndex`].
+    pub fn get_hdr_secindex(&self, section_index: SectionIndex) -> SectionHdr {
+        // Get slice through section index
+        let offset = section_index.base as usize;
+        let slice = &self.buf[offset..offset + SECTION_HDR_SIZE];
+
+        // Initialize and copy content to entry
+        let mut hdr = SectionHdr::zeroed();
+        bytemuck::bytes_of_mut(&mut hdr).copy_from_slice(slice);
+        hdr
+    }
+
+    /// Get the section header by using index number.
+    pub fn get_hdr_idx(&self, index: usize) -> Option<SectionHdr> {
+        // Get slice through section index
+        let section_index = self.get(index)?;
+        Some(self.get_hdr_secindex(section_index))
+    }
+
+    /// Get the section name by using [`SectionIndex`].
+    pub fn get_name_secindex(&self, section_index: SectionIndex) -> &str {
+        // Get slice through section index
+        let offset = section_index.base as usize + SECTION_HDR_SIZE;
+        let content = &self.buf[offset..offset + section_index.name_len as usize];
+        slice_to_str(content).expect("Failed to get section's name")
+    }
+
+    /// Get the section name by using index number.
+    pub fn get_name_idx(&self, index: usize) -> Option<&str> {
+        // Get slice through section index
+        let section_index = self.get(index)?;
+        Some(self.get_name_secindex(section_index))
     }
 }
 
-/// The index implementations.
-///
-/// # Panics
-/// This will panic if your index is over than the length.
-impl Index<usize> for SectionIter<'_> {
-    type Output = Section;
+impl<'a> Iterator for SectionTable<'a> {
+    type Item = SectionIndex;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        // Check: Is index out if bounds
-        if index >= self.total as usize {
-            panic!(
-                "proka-exec: index out of bounds, the max size is {}, but index {} was got.",
-                self.total, index
-            )
-        }
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.get(self.current as usize)?;
+        self.current += 1;
+        Some(result)
+    }
+}
 
-        // Calculate target
-        let base = HEADER_SIZE;
-        let target = base + index * SECTION_SIZE;
+// Tests
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        // Get and convert
-        let buf = &self.buf[target..target + SECTION_SIZE];
-        unsafe { &*(buf.as_ptr() as *const Section) }
+    #[test]
+    fn test_header_length() {
+        assert_eq!(crate::SECTION_HDR_SIZE, 16);
+        assert_eq!(core::mem::size_of::<SectionHdr>(), 16)
     }
 }

@@ -1,5 +1,5 @@
 //! The header definitions.
-use crate::{HEADER_SIZE, Result, Error};
+use crate::{Error, HEADER_SIZE, Result};
 
 /// The magic number, fixed to 'PKEX'
 pub const PKEX_MAGIC: u32 = 0x58454B50;

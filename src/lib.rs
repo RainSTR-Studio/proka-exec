@@ -22,7 +22,7 @@
 //! - Read the executable file content;
 //! - Make this file's content to a slice (`&[u8]`)
 //! - Use [`Parser`] to parse the executable.
-//! 
+//!
 //! After this, you can do further operations through this parser by
 //! calling its functions.
 //!
@@ -65,10 +65,13 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use header::{ExecMode, Header};
-use sections::{Section, SectionError, SectionIter};
-pub use utils::*;
 use header::HeaderError;
+use header::{ExecMode, Header};
+use sections::{SectionError, SectionHdr, SectionIndex, SectionTable};
+pub use utils::*;
+
+#[cfg(feature = "alloc")]
+use crate::sections::SectionFlag;
 
 /// Generic result type in this crate
 pub type Result<T> = core::result::Result<T, Error>;
@@ -76,8 +79,11 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// The header size.
 pub const HEADER_SIZE: usize = core::mem::size_of::<Header>();
 
+/// The section header size.
+pub const SECTION_HDR_SIZE: usize = core::mem::size_of::<SectionHdr>();
+
 /// The section entry size
-pub const SECTION_SIZE: usize = core::mem::size_of::<Section>();
+pub const SECTION_INDEX_SIZE: usize = core::mem::size_of::<SectionIndex>();
 
 /// The error type of parsing header.
 #[repr(C)]
@@ -122,11 +128,7 @@ pub enum Error {
     /// May appear in converting slice to `&str`.
     UnknownCharacter,
 
-    /// The argument which gives is too long.
-    ///
-    /// For example, if a field, which require at most 16 bytes, but you gave
-    /// 17 bytes, it will return this error.
-    ArgsTooLong,
+    /// The
 
     /// No sections in the current executable.
     ///
@@ -167,8 +169,16 @@ impl<'a> Parser<'a> {
             return Err(Error::NotValidExecutable);
         }
 
+        // Check: Is section count = 0?
+        if header.sections == 0 {
+            return Err(Error::NoSections);
+        }
+
         // Check: Is the buffer contains all sections
-        let len = HEADER_SIZE + header.sections as usize * SECTION_SIZE;
+        let offset = HEADER_SIZE + (header.sections as usize - 1) * SECTION_INDEX_SIZE;
+        let index_content = &buf[offset..offset + SECTION_INDEX_SIZE];
+        let index = unsafe { *(index_content.as_ptr() as *const SectionIndex) };
+        let len = (index.base + index.name_len) as usize + SECTION_HDR_SIZE;
         if buf.len() < len {
             return Err(Error::ExecutableCorrupted);
         }
@@ -220,10 +230,11 @@ impl<'a> Parser<'a> {
         }
 
         // Check: Is each section's base and length correct (section check)
-        let min_base = HEADER_SIZE + self.header.sections as usize * SECTION_SIZE;
-        for (index, section) in self.sections().enumerate() {
+        let min_base = HEADER_SIZE + self.header.sections as usize * SECTION_HDR_SIZE;
+        for (index, section_index) in self.sections().enumerate() {
+            let section = self.sections().get_hdr_secindex(section_index);
             let base_off = section.base as usize;
-            let len = section.length as usize;
+            let len = section.size as usize;
             let entry_sec = self.header.entry_sec as usize;
 
             // Check: Is section base in metadata range
@@ -263,12 +274,14 @@ impl<'a> Parser<'a> {
     /// `Option<&'static [u8]>`: The content of this section, return `None` if this section not exist.
     pub fn get_section_content(&self, secname: &str) -> Option<&'a [u8]> {
         // Iterate all sections...
-        for section in self.sections() {
-            let name = section.name;
-            if str_to_array(secname) == name {
+        for section_index in self.sections() {
+            let table = self.sections();
+            let name = table.get_name_secindex(section_index);
+            let section = table.get_hdr_secindex(section_index);
+            if secname == name {
                 // Get its base and length
                 let base = section.base as usize;
-                let length = section.length as usize;
+                let length = section.size as usize;
                 let content = &self.buf[base..base + length];
                 return Some(content);
             }
@@ -284,8 +297,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Get each section table.
-    pub fn sections(&self) -> SectionIter<'_> {
-        SectionIter::new(self.buf, self.total_sections, 0)
+    pub fn sections(&self) -> SectionTable<'_> {
+        SectionTable::new(self.buf, self.total_sections)
     }
 }
 
@@ -377,7 +390,7 @@ impl<'a> Builder<'a> {
     pub fn append(
         &mut self,
         data: &'a [u8],
-        name: &str,
+        name: &'a str,
         is_loadable: bool,
         is_execable: bool,
         entry: Option<u32>,
@@ -387,15 +400,26 @@ impl<'a> Builder<'a> {
             return Err(Error::ExecutableCorrupted);
         }
 
+        let flag = match (is_loadable, is_execable) {
+            (true, true) => SectionFlag::LOADABLE | SectionFlag::EXECABLE,
+            (true, false) => SectionFlag::LOADABLE,
+            (false, true) => SectionFlag::EXECABLE,
+            (false, false) => SectionFlag::empty(),
+        };
+
         let section = InnerSections {
-            secinfo: Section {
-                name: str_to_array(name),
-                is_loadable,
-                is_execable,
+            secinfo: SectionHdr {
+                flag,
+                _pad1: [0; 3],
                 base: 0, // Will replace during building...
-                length: data.len() as u32,
-                _reserved: [0; 6],
+                size: data.len() as u32,
+                _pad2: [0; 4],
             },
+            secindex: SectionIndex {
+                base: 0, // Will replace during building...
+                name_len: name.len() as u32,
+            },
+            name,
             data,
         };
         self.sections.push(section);
@@ -444,16 +468,26 @@ impl<'a> Builder<'a> {
             data.extend_from_slice(&header);
         }
 
-        // And each section info...
+        // And section index...
         let mut cnt = 0;
+        for section in &self.sections {
+            let mut secindex = section.secindex;
+            secindex.base = (HEADER_SIZE + self.sections.len() * SECTION_INDEX_SIZE + cnt) as u32;
+            data.extend_from_slice(&secindex.to_array());
+            cnt += SECTION_HDR_SIZE + secindex.name_len as usize;
+        }
+
+        // And each section info...
         for section in &self.sections {
             let mut secinfo = section.secinfo;
 
             // Update base...
-            secinfo.base = (HEADER_SIZE + self.sections.len() * SECTION_SIZE + cnt) as u32;
+            // Note: The `cnt` does not empty, which means that is already store the whole section index.
+            secinfo.base = (HEADER_SIZE + self.sections.len() * SECTION_INDEX_SIZE + cnt) as u32;
 
             // Push...
             data.extend_from_slice(&secinfo.to_array());
+            data.extend_from_slice(section.name.as_bytes());
             cnt += section.data.len();
         }
 
@@ -470,6 +504,8 @@ impl<'a> Builder<'a> {
 /// Internal section form.
 #[derive(Debug, Clone, Copy)]
 struct InnerSections<'a> {
-    pub secinfo: Section,
+    pub secinfo: SectionHdr,
+    pub secindex: SectionIndex,
+    pub name: &'a str,
     pub data: &'a [u8],
 }

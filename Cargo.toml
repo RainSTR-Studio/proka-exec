@@ -1,6 +1,6 @@
 [package]
 name = "proka-exec"
-version = "0.4.4"
+version = "0.5.0"
 edition = "2024"
 authors = ["zhangxuan2011 <zx20110412@outlook.com>"]
 description = "The proka executable definitions and utilities"
@@ -9,6 +9,8 @@ readme = "README.md"
 repository = "https://github.com/RainSTR-Studio/proka-exec"
 
 [dependencies]
+bitflags = { version = "2.13.1", features = ["bytemuck"] }
+bytemuck = { version = "1.25.2", features = ["derive"] }
 
 [features]
 default = ["alloc"]
