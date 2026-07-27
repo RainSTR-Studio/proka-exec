@@ -32,7 +32,7 @@ pub struct Header {
     /// For notes, see above.
     pub max: [u16; 3],
 
-    /// Signates is this executable run as `userapp` or `coredrv`.
+    /// Signifies is this executable run as `userapp` or `coredrv`.
     pub mode: ExecMode,
 
     /// The section table count.
@@ -95,7 +95,7 @@ impl Header {
 }
 
 /// The executable mode.
-#[repr(C)]
+#[repr(u32)]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecMode {
     /// Run in `userapp` mode (Ring 3).

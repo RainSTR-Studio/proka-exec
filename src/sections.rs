@@ -1,7 +1,7 @@
 //! The definitions of section entry.
 use crate::{Error, HEADER_SIZE, Result, SECTION_HDR_SIZE, SECTION_INDEX_SIZE, slice_to_str};
 use bitflags::bitflags;
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{Pod, Zeroable, bytes_of};
 
 /// Errors in section
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,9 +62,10 @@ bitflags! {
 impl SectionHdr {
     /// Convert this object to array.
     #[inline]
-    pub const fn to_array(&self) -> [u8; SECTION_HDR_SIZE] {
-        // SAFETY: used `#[repr(C)]`
-        unsafe { core::ptr::read(self as *const Self as *const [u8; SECTION_HDR_SIZE]) }
+    pub fn to_array(&self) -> [u8; SECTION_HDR_SIZE] {
+        let mut arr = [0u8; SECTION_HDR_SIZE];
+        arr.copy_from_slice(bytes_of(self));
+        arr
     }
 
     /// Validate is this section not corrupted.
@@ -80,7 +81,7 @@ impl SectionHdr {
 }
 
 /// The index of each section entry.
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct SectionIndex {
     /// The base offset of the section header ([`SectionHdr`]).
@@ -93,9 +94,10 @@ pub struct SectionIndex {
 impl SectionIndex {
     /// Convert this object to array.
     #[inline]
-    pub const fn to_array(&self) -> [u8; SECTION_INDEX_SIZE] {
-        // SAFETY: used `#[repr(C)]`
-        unsafe { core::ptr::read(self as *const Self as *const [u8; SECTION_INDEX_SIZE]) }
+    pub fn to_array(&self) -> [u8; SECTION_INDEX_SIZE] {
+        let mut arr = [0u8; SECTION_INDEX_SIZE];
+        arr.copy_from_slice(bytes_of(self));
+        arr
     }
 }
 
