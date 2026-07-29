@@ -26,7 +26,7 @@ pub enum SectionError {
     EntryOffsetOutOfRange(u32, u32),
 }
 
-/// A section entry.
+/// The header of each section metadata.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct SectionHdr {

@@ -6,11 +6,11 @@
 //! [![GitHub Issues](https://img.shields.io/github/issues/RainSTR-Studio/proka-exec?style=flat-square)](https://github.com/RainSTR-Studio/proka-exec/issues)
 //! [![GitHub Pull Requests](https://img.shields.io/github/issues-pr/RainSTR-Studio/proka-exec?style=flat-square)](https://github.com/RainSTR-Studio/proka-exec/pulls)
 //! [![Documentation](https://img.shields.io/badge/docs-prokadoc-brightgreen?style=flat-square)](https://prokadoc.pages.dev/)
-//!
+//! 
 //! Copyright (C) 2026 RainSTR Studio. Licensed under GNU GPLv3.
-//!
+//! 
 //! ---
-//!
+//! 
 //! ## Introduction
 //! This crate provides the definitions of headers, section index, section metadata,
 //! and some utils to help you parse the executable easily.
@@ -24,7 +24,7 @@
 //! 
 //! We can use this picture to explain their segmented structure:
 //! 
-//! `[Headers] [Section Index] [Section Metadata] [Data]`
+//! `[Headers] [Section Index 1] [Section Index 2] ... [Section Metadata 1] [Section Metadata 2] ... [Data]`
 //! 
 //! Simultaneously, the `[Section Metadata]` can be separated as follows:
 //! 
@@ -34,6 +34,7 @@
 //! The section name is different - It's dynamic, so you can store almost infinite words in it!
 //!
 //! ## Steps to use this crate
+//! ### Parsing
 //! Before you parse it, you should do these steps:
 //!
 //! - Read the executable file content;
@@ -42,19 +43,49 @@
 //!
 //! After this, you can do further operations through this parser by
 //! calling its functions.
-//!
+//! 
+//! ### Building
+//! Here we provided a tool [`Builder`] to help you do building process easily.
+//! 
+//! Before parsing, make sure you have enabled feature `alloc`, or you can't find where [`Builder`] is.
+//! 
+//! Then you can do these steps:
+//!  - Set up author name (32 bytes limit);
+//!  - Set up program name (32 bytes limit);
+//!  - Set up the executable type (UserApp/CoreDrv);
+//!  - Append section content (Can push multiple sections);
+//!  - Build the executable.
+//! 
 //! ## Example Usage
-//! ```rust, ignore
+//! ### Parsing
+//! ```rust
 //! use proka_exec::Parser;
 //! use std::path::PathBuf;
 //!
-//! let file = PathBuf::from("example.pke");
+//! let file = PathBuf::from("tests/testbin/sample.pke");
 //! let content = std::fs::read(file).expect("Failed to read file");
-//! let parser = Parser::init(&content).expect("Failed to parse parser");
+//! let parser = Parser::init(&content).expect("Failed to parse PKE format");
 //! 
 //! // More API see below
 //! ```
 //!
+//! ### Building
+//! ```rust
+//! use proka_exec::{Builder, header::ExecMode};
+//! use std::path::PathBuf;
+//! 
+//! static EXAMPLE_CONTENT: &[u8] = b"Hello, World!";
+//!
+//! let mut builder = Builder::new();
+//! builder.set_author("example");
+//! builder.set_name("appname");
+//! builder.set_mode(ExecMode::UserApp);
+//! builder.append(EXAMPLE_CONTENT, ".example.section", false, false, None);    // (data, name, is_loadable, is_execable, entry)
+//! let content = builder.build().expect("Failed to build executable");
+//! std::fs::write("example.pke", &content).expect("Failed to write file");
+//! ```
+//!
+//! 
 //! # LICENSE
 //! This crate is under license [GPL-v3](https://github.com/RainSTR-Studio/proka-exec/blob/main/LICENSE),
 //! and you must follow its rules.
@@ -140,8 +171,6 @@ pub enum Error {
     ///
     /// May appear in converting slice to `&str`.
     UnknownCharacter,
-
-    /// The
 
     /// No sections in the current executable.
     ///
@@ -362,7 +391,7 @@ impl<'a> Builder<'a> {
     /// Set up the program name.
     ///
     /// # Note
-    /// If the author that you provide is longer than 32,
+    /// If the name that you provide is longer than 32,
     /// it may truncated.
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_string();
@@ -491,6 +520,8 @@ impl<'a> Builder<'a> {
         }
 
         // And each section info...
+        // Here we didn't empty the `cnt`, so that `cnt` is already store the whole section index.
+        // So that seems no something wrong in this calculation...
         for section in &self.sections {
             let mut secinfo = section.secinfo;
 

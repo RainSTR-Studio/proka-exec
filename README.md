@@ -25,9 +25,11 @@ This executable is structured as follows:
 - Data - The binary content.
 
 We can use this picture to explain their segmented structure:
+
 `[Headers] [Section Index] [Section Metadata] [Data]`
 
 Also, the `[Section Metadata]` can be separated as follows:
+
 `[Section Headers] [Section Name]`
 
 In the picture above, the `[Section Headers]`'s length is fixed, which is recorded in [`SECTION_HDR_SIZE`]; 
