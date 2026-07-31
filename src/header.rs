@@ -1,6 +1,6 @@
 //! The header definitions.
 use bitflags::bitflags;
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{Pod, Zeroable, bytes_of};
 
 use crate::{Error, HEADER_SIZE, Result, VERSION_CURRENT, VERSION_MINIMAL};
 
@@ -127,9 +127,10 @@ impl Header {
 
     /// Convert this header to array
     #[inline]
-    pub const fn to_array(&self) -> [u8; HEADER_SIZE] {
-        // SAFETY: used `#[repr(C)]`
-        unsafe { core::ptr::read(self as *const Self as *const [u8; HEADER_SIZE]) }
+    pub fn to_array(&self) -> [u8; HEADER_SIZE] {
+        let mut arr = [0u8; HEADER_SIZE];
+        arr.copy_from_slice(bytes_of(self));
+        arr
     }
 }
 
