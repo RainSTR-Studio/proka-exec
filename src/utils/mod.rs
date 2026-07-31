@@ -1,4 +1,6 @@
 //! Utilities to parse proka exec headers.
+pub(crate) mod builder;
+pub(crate) mod parser;
 use crate::Error;
 
 /// Convert a `&str` to a specified-length array.

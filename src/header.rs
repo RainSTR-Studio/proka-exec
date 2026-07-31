@@ -1,5 +1,8 @@
 //! The header definitions.
-use crate::{Error, HEADER_SIZE, Result};
+use bitflags::bitflags;
+use bytemuck::{Pod, Zeroable};
+
+use crate::{Error, HEADER_SIZE, Result, VERSION_CURRENT, VERSION_MINIMAL};
 
 /// The magic number, fixed to 'PKEX'
 pub const PKEX_MAGIC: u32 = 0x58454B50;
@@ -8,32 +11,60 @@ pub const PKEX_MAGIC: u32 = 0x58454B50;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeaderError {
     /// Magic number error.
-    /// 
+    ///
     /// Contains the incorrect magic number.
     MagicNumberError(u32),
 }
 
 /// The main header struct, which contains the metadata of the PKE file.
-#[repr(C, packed)]
-#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Header {
     /// The magic number, fixed to 'PKEX'
     pub magic: u32,
+
+    /// Format version used to generate this PKEX binary.
+    ///
+    /// Represents the PKEX file specification revision that the builder followed
+    /// when creating this executable. This is separate from `version_minimum`.
+    ///
+    /// - Breaking binary layout changes: increment this value, set `version_minimum` equal to it.
+    /// - Backward-compatible extensions (only using reserved space): increment this value,
+    ///   leave `version_minimum` unchanged.
+    pub version_current: u32,
+
+    /// Lowest PKEX format version that can parse this binary correctly.
+    ///
+    /// Loader enforcement rule: If the maximum format version supported by the loader
+    /// is less than this value, the loader **MUST reject loading this executable**.
+    pub version_minimal: u32,
+
+    /// Padding field #1.
+    _pad1: [u8; 4],
 
     /// The minimal kernel version supported.
     ///
     /// # Note
     /// As the `proka-bootloader`'s definitions, its format is similar
-    /// like `[major, minor, fix]`. See `proka-bootloader` crate for more informations.
+    /// like `[major, minor, fix]`. See [`proka-bootloader`](https://docs.rs/proka-bootloader) crate for more informations.
     pub min: [u16; 3],
+
+    /// Padding field #2.
+    _pad2: [u8; 2],
 
     /// The maximum kernel supported.
     ///
     /// For notes, see above.
     pub max: [u16; 3],
 
+    /// Padding field #3.
+    _pad3: [u8; 2],
+
     /// Signifies is this executable run as `userapp` or `coredrv`.
     pub mode: ExecMode,
+
+    /// Padding field #4.
+    _pad4: [u8; 3],
 
     /// The section table count.
     pub sections: u16,
@@ -50,8 +81,8 @@ pub struct Header {
     /// The executable/project name.
     pub name: [u8; 32],
 
-    /// Extended bits for different mode parsing (reserved).
-    pub extended: [u8; 36],
+    /// Reserved fields
+    pub _reserved: [u8; 20],
 }
 
 impl Default for Header {
@@ -65,15 +96,21 @@ impl Header {
     pub fn new() -> Self {
         Self {
             magic: PKEX_MAGIC,
+            version_current: VERSION_CURRENT,
+            version_minimal: VERSION_MINIMAL,
+            _pad1: [0; 4],
             min: [0; 3],
+            _pad2: [0; 2],
             max: [0; 3],
+            _pad3: [0; 2],
             mode: ExecMode::UserApp,
+            _pad4: [0; 3],
             sections: 0,
             entry_sec: 0,
             entry_off: HEADER_SIZE as u32,
             author: [0; 32],
             name: [0; 32],
-            extended: [0u8; 36],
+            _reserved: [0; 20],
         }
     }
 
@@ -81,7 +118,9 @@ impl Header {
     #[inline]
     pub fn validate(&self) -> Result<()> {
         if self.magic != PKEX_MAGIC {
-            return Err(Error::HeaderError(HeaderError::MagicNumberError(self.magic)));
+            return Err(Error::HeaderError(HeaderError::MagicNumberError(
+                self.magic,
+            )));
         }
         Ok(())
     }
@@ -94,16 +133,17 @@ impl Header {
     }
 }
 
-/// The executable mode.
-#[repr(u32)]
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecMode {
-    /// Run in `userapp` mode (Ring 3).
-    #[default]
-    UserApp,
+bitflags! {
+    /// The executable mode.
+    #[repr(transparent)]
+    #[derive(Debug, Clone, Copy, Pod, Zeroable)]
+    pub struct ExecMode: u8 {
+        /// Run in `userapp` mode (Ring 3).
+        const UserApp = 0x00000000;
 
-    /// Run in `coredrv` mode (Ring 0).
-    CoreDrv,
+        /// Run in `coredrv` mode (Ring 0).
+        const CoreDrv = 0x00000001;
+    }
 }
 
 // Tests
