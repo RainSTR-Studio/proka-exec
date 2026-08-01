@@ -1,7 +1,6 @@
 //! The header definitions.
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable, bytes_of};
-
 use crate::{Error, HEADER_SIZE, Result, VERSION_CURRENT, VERSION_MINIMAL};
 
 /// The magic number, fixed to 'PKEX'
@@ -137,13 +136,13 @@ impl Header {
 bitflags! {
     /// The executable mode.
     #[repr(transparent)]
-    #[derive(Debug, Clone, Copy, Pod, Zeroable)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Pod, Zeroable)]
     pub struct ExecMode: u8 {
         /// Run in `userapp` mode (Ring 3).
-        const UserApp = 0x00000000;
+        const UserApp = 0x00;
 
         /// Run in `coredrv` mode (Ring 0).
-        const CoreDrv = 0x00000001;
+        const CoreDrv = 0x01;
     }
 }
 
