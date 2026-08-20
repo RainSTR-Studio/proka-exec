@@ -85,13 +85,23 @@ impl SectionHdr {
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct SectionIndex {
     /// The base offset of the section header ([`SectionHdr`]).
-    pub base: u32,
+    pub(crate) base: u32,
 
     /// The total length of the section name.
-    pub name_len: u32,
+    pub(crate) name_len: u32,
 }
 
 impl SectionIndex {
+    /// Get the base field of current index, which references to [`SectionHdr`].
+    pub fn base(&self) -> u32 {
+        self.base
+    }
+
+    /// Get the length of the name.
+    pub fn name_len(&self) -> u32 {
+        self.name_len
+    }
+
     /// Convert this object to array.
     #[inline]
     pub fn to_array(&self) -> [u8; SECTION_INDEX_SIZE] {
