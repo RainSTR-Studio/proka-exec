@@ -1,5 +1,5 @@
 //! The definitions of section entry.
-use crate::{Error, HEADER_SIZE, Result, SECTION_HDR_SIZE, SECTION_INDEX_SIZE, slice_to_str};
+use crate::{HEADER_SIZE, SECTION_HDR_SIZE, SECTION_INDEX_SIZE, slice_to_str};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable, bytes_of};
 
@@ -61,17 +61,6 @@ impl SectionHdr {
         let mut arr = [0u8; SECTION_HDR_SIZE];
         arr.copy_from_slice(bytes_of(self));
         arr
-    }
-
-    /// Validate is this section not corrupted.
-    #[inline]
-    pub fn validate(&self) -> Result<()> {
-        // Check: Is size 0
-        if self.size == 0 {
-            return Err(Error::SectionError(SectionError::LengthError));
-        }
-
-        Ok(())
     }
 }
 
