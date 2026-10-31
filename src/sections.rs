@@ -6,11 +6,6 @@ use bytemuck::{Pod, Zeroable, bytes_of};
 /// Errors in section
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SectionError {
-    /// Section length error.
-    ///
-    /// Will appear if recorded section length is 0.
-    LengthError,
-
     /// Section base error.
     ///
     /// Will appear if specified section base is lower than metadata length (128+32).

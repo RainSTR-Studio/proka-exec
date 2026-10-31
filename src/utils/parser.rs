@@ -83,7 +83,6 @@ impl<'a> Parser<'a> {
     ///
     ///  - Is the header min >= max;
     ///  - Is each section's base correct;
-    ///  - Is the section's length not zeroed;
     ///  - Is section base out of length;
     ///  - Is entry_off is over than section length.
     pub fn validate(&self) -> Result<()> {
@@ -109,11 +108,6 @@ impl<'a> Parser<'a> {
                 return Err(Error::SectionError(SectionError::BaseError(
                     base_off as u32,
                 )));
-            }
-
-            // Check: Is section length not zeroed
-            if len == 0 {
-                return Err(Error::SectionError(SectionError::LengthError));
             }
 
             // Check: Is section entry_off out of range
